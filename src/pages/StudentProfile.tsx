@@ -9,6 +9,7 @@ import { AddPaymentDialog } from "@/components/student/AddPaymentDialog";
 import { EditStudentDialog } from "@/components/student/EditStudentDialog";
 import { DeleteStudentDialog } from "@/components/student/DeleteStudentDialog";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { GenerateReceiptButton } from "@/components/student/GenerateReceiptButton";
 
 type Student = {
   id: string;
@@ -27,6 +28,7 @@ const StudentProfile = () => {
   const [loading, setLoading] = useState(true);
   const [totalPaid, setTotalPaid] = useState(0);
   const [totalDue, setTotalDue] = useState(0);
+  const [pendingMonths, setPendingMonths] = useState<string[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -48,13 +50,29 @@ const StudentProfile = () => {
       const total = paymentsResult.data?.reduce((sum, p) => sum + Number(p.amount_paid), 0) || 0;
       setTotalPaid(total);
       
-      // Calculate due amount
+      // Calculate due amount and pending months
       const joiningDate = new Date(studentResult.data.joining_date);
       const now = new Date();
       const monthsDiff = (now.getFullYear() - joiningDate.getFullYear()) * 12 + 
                          (now.getMonth() - joiningDate.getMonth()) + 1;
       const totalExpected = monthsDiff * studentResult.data.monthly_fee;
-      setTotalDue(Math.max(0, totalExpected - total));
+      const dueAmount = Math.max(0, totalExpected - total);
+      setTotalDue(dueAmount);
+      
+      // Calculate pending months
+      const paidMonths = new Set(paymentsResult.data?.map(p => p.month) || []);
+      const pending: string[] = [];
+      
+      for (let i = 0; i < monthsDiff; i++) {
+        const date = new Date(joiningDate);
+        date.setMonth(joiningDate.getMonth() + i);
+        const monthYear = date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+        if (!paidMonths.has(monthYear)) {
+          pending.push(monthYear);
+        }
+      }
+      
+      setPendingMonths(pending);
     }
     setLoading(false);
   };
@@ -85,7 +103,17 @@ const StudentProfile = () => {
             <h1 className="text-2xl sm:text-3xl font-bold">{student.name}</h1>
             <p className="text-muted-foreground">Class {student.class}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {totalDue > 0 && (
+              <GenerateReceiptButton
+                studentName={student.name}
+                studentId={student.id}
+                monthlyFee={student.monthly_fee}
+                totalDue={totalDue}
+                joiningDate={student.joining_date}
+                pendingMonths={pendingMonths}
+              />
+            )}
             <EditStudentDialog student={student} onUpdate={loadData} />
             <DeleteStudentDialog studentId={student.id} studentName={student.name} />
           </div>

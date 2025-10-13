@@ -8,6 +8,9 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background">
+      <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
+        <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Ram Ram Piyush</h2>
+      </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center space-y-8">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-primary shadow-hover">
