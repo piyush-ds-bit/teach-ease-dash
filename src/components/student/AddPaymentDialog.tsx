@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { paymentSchema } from "@/lib/validation";
 
 type AddPaymentDialogProps = {
   studentId: string;
@@ -38,17 +39,14 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
       setUploading(true);
       const fileExt = file.name.split(".").pop();
       const fileName = `${studentId}-${Date.now()}.${fileExt}`;
-      const { error: uploadError, data } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("payment-proofs")
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("payment-proofs")
-        .getPublicUrl(fileName);
-
-      return publicUrl;
+      // Store the file path instead of public URL since bucket is now private
+      return fileName;
     } catch (error: any) {
       toast({
         title: "Upload failed",
@@ -66,6 +64,20 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
     setLoading(true);
 
     try {
+      // Validate form data
+      const validationResult = paymentSchema.safeParse({
+        month: formData.month,
+        amount_paid: Number(formData.amount_paid),
+        payment_date: formData.payment_date,
+        payment_mode: formData.payment_mode,
+        transaction_id: formData.transaction_id || null,
+      });
+
+      if (!validationResult.success) {
+        const errors = validationResult.error.errors.map(e => e.message).join(", ");
+        throw new Error(errors);
+      }
+
       let proofUrl = null;
       if (formData.proof_image) {
         proofUrl = await uploadProof(formData.proof_image);
@@ -73,11 +85,11 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
 
       const { error } = await supabase.from("payments").insert({
         student_id: studentId,
-        month: formData.month,
-        amount_paid: Number(formData.amount_paid),
-        payment_date: formData.payment_date,
-        payment_mode: formData.payment_mode,
-        transaction_id: formData.transaction_id || null,
+        month: validationResult.data.month,
+        amount_paid: validationResult.data.amount_paid,
+        payment_date: validationResult.data.payment_date,
+        payment_mode: validationResult.data.payment_mode,
+        transaction_id: validationResult.data.transaction_id,
         proof_image_url: proofUrl,
       });
 

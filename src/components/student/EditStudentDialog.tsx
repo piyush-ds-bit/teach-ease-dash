@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Edit } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { studentSchema } from "@/lib/validation";
 
 type Student = {
   id: string;
@@ -41,15 +42,30 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
     setLoading(true);
 
     try {
+      // Validate form data
+      const validationResult = studentSchema.safeParse({
+        name: formData.name,
+        class: formData.class,
+        contact_number: formData.contact_number,
+        monthly_fee: Number(formData.monthly_fee),
+        joining_date: formData.joining_date,
+        remarks: formData.remarks || undefined,
+      });
+
+      if (!validationResult.success) {
+        const errors = validationResult.error.errors.map(e => e.message).join(", ");
+        throw new Error(errors);
+      }
+
       const { error } = await supabase
         .from("students")
         .update({
-          name: formData.name,
-          class: formData.class,
-          contact_number: formData.contact_number,
-          monthly_fee: Number(formData.monthly_fee),
-          joining_date: formData.joining_date,
-          remarks: formData.remarks || null,
+          name: validationResult.data.name,
+          class: validationResult.data.class,
+          contact_number: validationResult.data.contact_number,
+          monthly_fee: validationResult.data.monthly_fee,
+          joining_date: validationResult.data.joining_date,
+          remarks: validationResult.data.remarks || null,
         })
         .eq("id", student.id);
 

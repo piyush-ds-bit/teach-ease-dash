@@ -6,6 +6,7 @@ import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EditPaymentDialog } from "./EditPaymentDialog";
 import { DeletePaymentDialog } from "./DeletePaymentDialog";
+import { useToast } from "@/hooks/use-toast";
 
 type Payment = {
   id: string;
@@ -19,6 +20,7 @@ type Payment = {
 
 export const PaymentHistory = ({ studentId }: { studentId: string }) => {
   const [payments, setPayments] = useState<Payment[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
     loadPayments();
@@ -32,6 +34,26 @@ export const PaymentHistory = ({ studentId }: { studentId: string }) => {
       .order("payment_date", { ascending: false });
     
     setPayments(data || []);
+  };
+
+  const handleViewProof = async (proofPath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from("payment-proofs")
+        .createSignedUrl(proofPath, 3600); // 1 hour expiry
+
+      if (error) throw error;
+      
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load payment proof",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -93,7 +115,7 @@ export const PaymentHistory = ({ studentId }: { studentId: string }) => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => window.open(payment.proof_image_url!, "_blank")}
+                        onClick={() => handleViewProof(payment.proof_image_url!)}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
