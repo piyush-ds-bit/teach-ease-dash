@@ -1,0 +1,160 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Edit } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+type Student = {
+  id: string;
+  name: string;
+  class: string;
+  contact_number: string;
+  monthly_fee: number;
+  joining_date: string;
+  remarks: string;
+};
+
+type EditStudentDialogProps = {
+  student: Student;
+  onUpdate: () => void;
+};
+
+export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps) => {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: student.name,
+    class: student.class,
+    contact_number: student.contact_number,
+    monthly_fee: student.monthly_fee.toString(),
+    joining_date: student.joining_date,
+    remarks: student.remarks || "",
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const { error } = await supabase
+        .from("students")
+        .update({
+          name: formData.name,
+          class: formData.class,
+          contact_number: formData.contact_number,
+          monthly_fee: Number(formData.monthly_fee),
+          joining_date: formData.joining_date,
+          remarks: formData.remarks || null,
+        })
+        .eq("id", student.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Student updated successfully",
+      });
+
+      setOpen(false);
+      onUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <Edit className="h-4 w-4 mr-2" />
+          Edit Details
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Edit Student Details</DialogTitle>
+          <DialogDescription>
+            Update the student information below
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Full Name *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="class">Class *</Label>
+              <Input
+                id="class"
+                value={formData.class}
+                onChange={(e) => setFormData({ ...formData, class: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="contact">Contact Number *</Label>
+              <Input
+                id="contact"
+                type="tel"
+                value={formData.contact_number}
+                onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="fee">Monthly Fee (₹) *</Label>
+              <Input
+                id="fee"
+                type="number"
+                min="0"
+                value={formData.monthly_fee}
+                onChange={(e) => setFormData({ ...formData, monthly_fee: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="joining">Joining Date *</Label>
+              <Input
+                id="joining"
+                type="date"
+                value={formData.joining_date}
+                onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="remarks">Remarks (Optional)</Label>
+              <Textarea
+                id="remarks"
+                value={formData.remarks}
+                onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Updating..." : "Update Student"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};

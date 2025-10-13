@@ -14,7 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      payments: {
+        Row: {
+          amount_paid: number
+          created_at: string
+          id: string
+          month: string
+          payment_date: string
+          payment_mode: string
+          proof_image_url: string | null
+          student_id: string
+          transaction_id: string | null
+        }
+        Insert: {
+          amount_paid: number
+          created_at?: string
+          id?: string
+          month: string
+          payment_date: string
+          payment_mode: string
+          proof_image_url?: string | null
+          student_id: string
+          transaction_id?: string | null
+        }
+        Update: {
+          amount_paid?: number
+          created_at?: string
+          id?: string
+          month?: string
+          payment_date?: string
+          payment_mode?: string
+          proof_image_url?: string | null
+          student_id?: string
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      students: {
+        Row: {
+          class: string
+          contact_number: string
+          created_at: string
+          id: string
+          joining_date: string
+          monthly_fee: number
+          name: string
+          remarks: string | null
+        }
+        Insert: {
+          class: string
+          contact_number: string
+          created_at?: string
+          id?: string
+          joining_date: string
+          monthly_fee: number
+          name: string
+          remarks?: string | null
+        }
+        Update: {
+          class?: string
+          contact_number?: string
+          created_at?: string
+          id?: string
+          joining_date?: string
+          monthly_fee?: number
+          name?: string
+          remarks?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
