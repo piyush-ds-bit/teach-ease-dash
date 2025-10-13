@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EditPaymentDialog } from "./EditPaymentDialog";
+import { DeletePaymentDialog } from "./DeletePaymentDialog";
 
 type Payment = {
   id: string;
@@ -56,12 +58,15 @@ export const PaymentHistory = ({ studentId }: { studentId: string }) => {
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Proof
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="bg-card divide-y divide-border">
             {payments.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
+                <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
                   No payment records found
                 </td>
               </tr>
@@ -95,6 +100,12 @@ export const PaymentHistory = ({ studentId }: { studentId: string }) => {
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <EditPaymentDialog payment={payment} onUpdate={loadPayments} />
+                      <DeletePaymentDialog paymentId={payment.id} onDelete={loadPayments} />
+                    </div>
                   </td>
                 </tr>
               ))

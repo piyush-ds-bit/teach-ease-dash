@@ -7,6 +7,7 @@ import { ArrowLeft, Phone, Calendar, DollarSign, Edit } from "lucide-react";
 import { PaymentHistory } from "@/components/student/PaymentHistory";
 import { AddPaymentDialog } from "@/components/student/AddPaymentDialog";
 import { EditStudentDialog } from "@/components/student/EditStudentDialog";
+import { DeleteStudentDialog } from "@/components/student/DeleteStudentDialog";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 
 type Student = {
@@ -93,7 +94,10 @@ const StudentProfile = () => {
             <h1 className="text-3xl font-bold">{student.name}</h1>
             <p className="text-muted-foreground">Class {student.class}</p>
           </div>
-          <EditStudentDialog student={student} onUpdate={loadStudent} />
+          <div className="flex gap-2">
+            <EditStudentDialog student={student} onUpdate={loadStudent} />
+            <DeleteStudentDialog studentId={student.id} studentName={student.name} />
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
