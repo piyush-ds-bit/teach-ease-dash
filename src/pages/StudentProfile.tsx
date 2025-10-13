@@ -30,42 +30,33 @@ const StudentProfile = () => {
 
   useEffect(() => {
     if (id) {
-      loadStudent();
-      loadPayments();
+      loadData();
     }
   }, [id]);
 
-  const loadStudent = async () => {
-    const { data } = await supabase
-      .from("students")
-      .select("*")
-      .eq("id", id)
-      .single();
+  const loadData = async () => {
+    // Load both student and payments data
+    const [studentResult, paymentsResult] = await Promise.all([
+      supabase.from("students").select("*").eq("id", id).single(),
+      supabase.from("payments").select("*").eq("student_id", id)
+    ]);
     
-    if (data) {
-      setStudent(data);
-      calculateDue(data);
+    if (studentResult.data) {
+      setStudent(studentResult.data);
+      
+      // Calculate total paid
+      const total = paymentsResult.data?.reduce((sum, p) => sum + Number(p.amount_paid), 0) || 0;
+      setTotalPaid(total);
+      
+      // Calculate due amount
+      const joiningDate = new Date(studentResult.data.joining_date);
+      const now = new Date();
+      const monthsDiff = (now.getFullYear() - joiningDate.getFullYear()) * 12 + 
+                         (now.getMonth() - joiningDate.getMonth()) + 1;
+      const totalExpected = monthsDiff * studentResult.data.monthly_fee;
+      setTotalDue(Math.max(0, totalExpected - total));
     }
     setLoading(false);
-  };
-
-  const loadPayments = async () => {
-    const { data } = await supabase
-      .from("payments")
-      .select("*")
-      .eq("student_id", id);
-    
-    const total = data?.reduce((sum, p) => sum + Number(p.amount_paid), 0) || 0;
-    setTotalPaid(total);
-  };
-
-  const calculateDue = (studentData: Student) => {
-    const joiningDate = new Date(studentData.joining_date);
-    const now = new Date();
-    const monthsDiff = (now.getFullYear() - joiningDate.getFullYear()) * 12 + 
-                       (now.getMonth() - joiningDate.getMonth()) + 1;
-    const totalExpected = monthsDiff * studentData.monthly_fee;
-    setTotalDue(Math.max(0, totalExpected - totalPaid));
   };
 
   if (loading) {
@@ -89,63 +80,63 @@ const StudentProfile = () => {
           Back to Dashboard
         </Button>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">{student.name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">{student.name}</h1>
             <p className="text-muted-foreground">Class {student.class}</p>
           </div>
           <div className="flex gap-2">
-            <EditStudentDialog student={student} onUpdate={loadStudent} />
+            <EditStudentDialog student={student} onUpdate={loadData} />
             <DeleteStudentDialog studentId={student.id} studentName={student.name} />
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-4">
           <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                 Monthly Fee
               </CardTitle>
               <DollarSign className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₹{student.monthly_fee.toLocaleString()}</div>
+              <div className="text-lg sm:text-2xl font-bold">₹{student.monthly_fee.toLocaleString()}</div>
             </CardContent>
           </Card>
 
           <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                 Total Paid
               </CardTitle>
               <DollarSign className="h-4 w-4 text-success" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-success">₹{totalPaid.toLocaleString()}</div>
+              <div className="text-lg sm:text-2xl font-bold text-success">₹{totalPaid.toLocaleString()}</div>
             </CardContent>
           </Card>
 
           <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                 Total Due
               </CardTitle>
               <DollarSign className="h-4 w-4 text-warning" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-warning">₹{totalDue.toLocaleString()}</div>
+              <div className="text-lg sm:text-2xl font-bold text-warning">₹{totalDue.toLocaleString()}</div>
             </CardContent>
           </Card>
 
           <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                 Joining Date
               </CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-lg font-semibold">
+              <div className="text-sm sm:text-lg font-semibold">
                 {new Date(student.joining_date).toLocaleDateString()}
               </div>
             </CardContent>
@@ -170,12 +161,9 @@ const StudentProfile = () => {
           </CardContent>
         </Card>
 
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Payment History</h2>
-          <AddPaymentDialog studentId={student.id} onPaymentAdded={() => {
-            loadPayments();
-            loadStudent();
-          }} />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h2 className="text-xl sm:text-2xl font-bold">Payment History</h2>
+          <AddPaymentDialog studentId={student.id} onPaymentAdded={loadData} />
         </div>
 
         <PaymentHistory studentId={student.id} />
