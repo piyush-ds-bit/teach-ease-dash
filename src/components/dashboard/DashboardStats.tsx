@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, DollarSign, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, DollarSign, AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export const DashboardStats = () => {
   const [stats, setStats] = useState({
@@ -9,6 +10,16 @@ export const DashboardStats = () => {
     totalCollected: 0,
     totalPending: 0,
   });
+
+  const [visibility, setVisibility] = useState({
+    totalStudents: true,
+    feesCollected: true,
+    pendingFees: true,
+  });
+
+  const toggleVisibility = (key: keyof typeof visibility) => {
+    setVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   useEffect(() => {
     loadStats();
@@ -34,6 +45,7 @@ export const DashboardStats = () => {
 
   const statCards = [
     {
+      key: "totalStudents" as const,
       title: "Total Students",
       value: stats.totalStudents,
       icon: Users,
@@ -41,6 +53,7 @@ export const DashboardStats = () => {
       bgColor: "bg-primary/10",
     },
     {
+      key: "feesCollected" as const,
       title: "Fees Collected (This Month)",
       value: `₹${stats.totalCollected.toLocaleString()}`,
       icon: DollarSign,
@@ -48,6 +61,7 @@ export const DashboardStats = () => {
       bgColor: "bg-success/10",
     },
     {
+      key: "pendingFees" as const,
       title: "Pending Fees",
       value: `₹${stats.totalPending.toLocaleString()}`,
       icon: AlertCircle,
@@ -61,15 +75,34 @@ export const DashboardStats = () => {
       {statCards.map((stat) => (
         <Card key={stat.title} className="shadow-card hover:shadow-hover transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {stat.title}
-            </CardTitle>
-            <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
+            <div className="flex items-center justify-between w-full">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {stat.title}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => toggleVisibility(stat.key)}
+                  aria-label="Toggle visibility"
+                >
+                  {visibility[stat.key] ? (
+                    <Eye className="h-4 w-4" />
+                  ) : (
+                    <EyeOff className="h-4 w-4" />
+                  )}
+                </Button>
+                <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                </div>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stat.value}</div>
+            <div className={`text-2xl font-bold transition-all duration-300 ${!visibility[stat.key] ? 'blur-md select-none' : ''}`}>
+              {visibility[stat.key] ? stat.value : '••••••'}
+            </div>
           </CardContent>
         </Card>
       ))}

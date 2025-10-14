@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Phone, Calendar, DollarSign, Edit } from "lucide-react";
+import { ArrowLeft, Phone, Calendar, DollarSign, Edit, Eye, EyeOff } from "lucide-react";
 import { PaymentHistory } from "@/components/student/PaymentHistory";
 import { AddPaymentDialog } from "@/components/student/AddPaymentDialog";
 import { EditStudentDialog } from "@/components/student/EditStudentDialog";
@@ -30,6 +30,16 @@ const StudentProfile = () => {
   const [totalDue, setTotalDue] = useState(0);
   const [pendingMonths, setPendingMonths] = useState<string[]>([]);
 
+  const [cardVisibility, setCardVisibility] = useState({
+    monthlyFee: true,
+    totalPaid: true,
+    totalDue: true,
+  });
+
+  const toggleCardVisibility = (key: keyof typeof cardVisibility) => {
+    setCardVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   useEffect(() => {
     if (id) {
       loadData();
@@ -50,20 +60,25 @@ const StudentProfile = () => {
       const total = paymentsResult.data?.reduce((sum, p) => sum + Number(p.amount_paid), 0) || 0;
       setTotalPaid(total);
       
-      // Calculate due amount and pending months
+      // Calculate due amount and pending months (excluding joining month)
       const joiningDate = new Date(studentResult.data.joining_date);
       const now = new Date();
-      const monthsDiff = (now.getFullYear() - joiningDate.getFullYear()) * 12 + 
-                         (now.getMonth() - joiningDate.getMonth()) + 1;
+      
+      // Calculate months enrolled, excluding joining month
+      const monthsEnrolled = (now.getFullYear() - joiningDate.getFullYear()) * 12 + 
+                             (now.getMonth() - joiningDate.getMonth());
+      
+      // If joining month is current month or in future, no due yet
+      const monthsDiff = Math.max(0, monthsEnrolled);
       const totalExpected = monthsDiff * studentResult.data.monthly_fee;
       const dueAmount = Math.max(0, totalExpected - total);
       setTotalDue(dueAmount);
       
-      // Calculate pending months
+      // Calculate pending months (start from month 1, not month 0)
       const paidMonths = new Set(paymentsResult.data?.map(p => p.month) || []);
       const pending: string[] = [];
       
-      for (let i = 0; i < monthsDiff; i++) {
+      for (let i = 1; i <= monthsDiff; i++) {
         const date = new Date(joiningDate);
         date.setMonth(joiningDate.getMonth() + i);
         const monthYear = date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
@@ -122,37 +137,94 @@ const StudentProfile = () => {
         <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-4">
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                Monthly Fee
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-primary" />
+              <div className="flex items-center justify-between w-full">
+                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
+                  Monthly Fee
+                </CardTitle>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => toggleCardVisibility('monthlyFee')}
+                    aria-label="Toggle visibility"
+                  >
+                    {cardVisibility.monthlyFee ? (
+                      <Eye className="h-3 w-3" />
+                    ) : (
+                      <EyeOff className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <DollarSign className="h-4 w-4 text-primary" />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold">₹{student.monthly_fee.toLocaleString()}</div>
+              <div className={`text-lg sm:text-2xl font-bold transition-all duration-300 ${!cardVisibility.monthlyFee ? 'blur-md select-none' : ''}`}>
+                {cardVisibility.monthlyFee ? `₹${student.monthly_fee.toLocaleString()}` : '••••••'}
+              </div>
             </CardContent>
           </Card>
 
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                Total Paid
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-success" />
+              <div className="flex items-center justify-between w-full">
+                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
+                  Total Paid
+                </CardTitle>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => toggleCardVisibility('totalPaid')}
+                    aria-label="Toggle visibility"
+                  >
+                    {cardVisibility.totalPaid ? (
+                      <Eye className="h-3 w-3" />
+                    ) : (
+                      <EyeOff className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <DollarSign className="h-4 w-4 text-success" />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-success">₹{totalPaid.toLocaleString()}</div>
+              <div className={`text-lg sm:text-2xl font-bold text-success transition-all duration-300 ${!cardVisibility.totalPaid ? 'blur-md select-none' : ''}`}>
+                {cardVisibility.totalPaid ? `₹${totalPaid.toLocaleString()}` : '••••••'}
+              </div>
             </CardContent>
           </Card>
 
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                Total Due
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-warning" />
+              <div className="flex items-center justify-between w-full">
+                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
+                  Total Due
+                </CardTitle>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => toggleCardVisibility('totalDue')}
+                    aria-label="Toggle visibility"
+                  >
+                    {cardVisibility.totalDue ? (
+                      <Eye className="h-3 w-3" />
+                    ) : (
+                      <EyeOff className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <DollarSign className="h-4 w-4 text-warning" />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-warning">₹{totalDue.toLocaleString()}</div>
+              <div className={`text-lg sm:text-2xl font-bold text-warning transition-all duration-300 ${!cardVisibility.totalDue ? 'blur-md select-none' : ''}`}>
+                {cardVisibility.totalDue ? `₹${totalDue.toLocaleString()}` : '••••••'}
+              </div>
             </CardContent>
           </Card>
 
