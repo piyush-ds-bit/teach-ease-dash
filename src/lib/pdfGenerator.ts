@@ -105,11 +105,18 @@ export const generateReceipt = async (data: ReceiptData) => {
   }
 
 
-  // Top-right: "Ram Ram Piyush" heading
+  // --- Top-right: "Ram Ram {First Name}" ---
   pdf.setFontSize(16);
   pdf.setFont("helvetica", "bold");
   pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  pdf.text(`Ram Ram ${data.studentName}`, 190, 65, { align: "right" });
+  
+  // Extract first name only
+  const firstName = data.studentName ? data.studentName.split(" ")[0] : "";
+  const headerText = `Ram Ram ${firstName}`;
+  
+  // Dynamically align to right edge
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  pdf.text(headerText, pageWidth - 20, 65, { align: "right" });
 
   // Date
   pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
