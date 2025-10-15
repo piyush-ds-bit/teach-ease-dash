@@ -245,36 +245,6 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setTextColor(128, 128, 128);
   pdf.text("This is a computer-generated receipt", 105, 280, { align: "center" });
 
-  // --- Custom Footer Section ---
-  const addCustomFooter = () => {
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const footerY = pageHeight - 25; // keep it slightly above bottom margin
-  
-    pdf.setFontSize(10);
-    pdf.setTextColor(100); // subtle gray
-  
-    // Thank you message
-    pdf.text("“Thank you for learning with me!”", 105, footerY, { align: "center" });
-  
-    // Social Links
-    pdf.setFontSize(9);
-    const footerLinks = [
-      "🌐 Website: https://piyushkrsingh.lovable.app/",
-      "📸 Instagram: https://www.instagram.com/_piyushkrsingh_/",
-      "💼 LinkedIn: https://www.linkedin.com/in/piyushkrsingh-/"
-    ];
-  
-    let linkY = footerY + 6; // spacing after thank you line
-    footerLinks.forEach((link) => {
-      pdf.text(link, 105, linkY, { align: "center" });
-      linkY += 5; // spacing between links
-    });
-  };
-  
-  // Call the footer function before saving the PDF
-  addCustomFooter();
-
-
   // Generate blob for WhatsApp sharing
   const pdfBlob = pdf.output("blob");
   
