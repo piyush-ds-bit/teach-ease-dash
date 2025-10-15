@@ -186,16 +186,9 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setFont("helvetica", "normal");
   
   // Display pending months
-  const pendingMonths = getPendingMonths(data.joiningDate, data.currentDate);
-
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Pending Months:", 20, yPos);
-  pdf.setFont("helvetica", "normal");
-  yPos += lineHeight;
-  
-  if (pendingMonths.length > 0) {
-    const monthsText = pendingMonths.join(", ");
-    const splitMonths = pdf.splitTextToSize(monthsText, 170); // wrap if too long
+  if (data.pendingMonths.length > 0) {
+    const monthsText = data.pendingMonths.join(", ");
+    const splitMonths = pdf.splitTextToSize(monthsText, 170);
     pdf.text(splitMonths, 20, yPos);
     yPos += splitMonths.length * lineHeight;
   } else {
