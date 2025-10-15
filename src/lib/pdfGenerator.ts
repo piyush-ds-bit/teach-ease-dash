@@ -35,81 +35,81 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.text("TeachEase Dashboard", 105, 30, { align: "center" });
 
   // Top-left: Student photo (if available)
-let photoYOffset = 0;
-
-try {
-  const photoImg = new Image();
-  photoImg.crossOrigin = "anonymous";
-  photoImg.src = data.profilePhotoUrl || "/default_avatar.jpg"; // <-- updated to .jpg
-
-  await new Promise((resolve) => {
-    photoImg.onload = () => {
-      try {
-        const photoX = 20;
-        const photoY = 50;
-        const photoSize = 30;
-
-        // Create circular clipped version in canvas
-        const canvas = document.createElement("canvas");
-        canvas.width = photoSize * 4;
-        canvas.height = photoSize * 4;
-        const ctx = canvas.getContext("2d");
-
-        // Draw circular mask
-        ctx.beginPath();
-        ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2, true);
-        ctx.closePath();
-        ctx.clip();
-
-        // Draw the image inside the circle
-        ctx.drawImage(photoImg, 0, 0, canvas.width, canvas.height);
-
-        // Convert clipped image to base64
-        const clippedImage = canvas.toDataURL("image/jpeg", 1.0);
-
-        // Add clipped image to PDF
-        pdf.addImage(clippedImage, "JPEG", photoX, photoY, photoSize, photoSize);
-
-        // Add circular border
-        pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-        pdf.setLineWidth(0.5);
-        pdf.circle(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, "S");
-
-        photoYOffset = 40;
-      } catch (error) {
-        console.error("Error adding photo to PDF:", error);
-      }
-      resolve(true);
-    };
-
-    photoImg.onerror = () => {
-      console.warn("Profile photo failed to load, using default avatar.");
-      const fallbackImg = new Image();
-      fallbackImg.src = "/default_avatar.jpg"; // <-- updated to .jpg
-      fallbackImg.onload = () => {
-        const photoX = 20;
-        const photoY = 50;
-        const photoSize = 30;
-        pdf.addImage(fallbackImg, "JPEG", photoX, photoY, photoSize, photoSize);
-        pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-        pdf.setLineWidth(0.5);
-        pdf.circle(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, "S");
-        photoYOffset = 40;
+  let photoYOffset = 0;
+  
+  try {
+    const photoImg = new Image();
+    photoImg.crossOrigin = "anonymous";
+    photoImg.src = data.profilePhotoUrl || "/default_avatar.jpg"; // <-- updated to .jpg
+  
+    await new Promise((resolve) => {
+      photoImg.onload = () => {
+        try {
+          const photoX = 20;
+          const photoY = 50;
+          const photoSize = 30;
+  
+          // Create circular clipped version in canvas
+          const canvas = document.createElement("canvas");
+          canvas.width = photoSize * 4;
+          canvas.height = photoSize * 4;
+          const ctx = canvas.getContext("2d");
+  
+          // Draw circular mask
+          ctx.beginPath();
+          ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2, true);
+          ctx.closePath();
+          ctx.clip();
+  
+          // Draw the image inside the circle
+          ctx.drawImage(photoImg, 0, 0, canvas.width, canvas.height);
+  
+          // Convert clipped image to base64
+          const clippedImage = canvas.toDataURL("image/jpeg", 1.0);
+  
+          // Add clipped image to PDF
+          pdf.addImage(clippedImage, "JPEG", photoX, photoY, photoSize, photoSize);
+  
+          // Add circular border
+          pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+          pdf.setLineWidth(0.5);
+          pdf.circle(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, "S");
+  
+          photoYOffset = 40;
+        } catch (error) {
+          console.error("Error adding photo to PDF:", error);
+        }
         resolve(true);
       };
-      fallbackImg.onerror = () => resolve(false);
-    };
-  });
-} catch (error) {
-  console.error("Error loading profile photo:", error);
-}
+  
+      photoImg.onerror = () => {
+        console.warn("Profile photo failed to load, using default avatar.");
+        const fallbackImg = new Image();
+        fallbackImg.src = "/default_avatar.jpg"; // <-- updated to .jpg
+        fallbackImg.onload = () => {
+          const photoX = 20;
+          const photoY = 50;
+          const photoSize = 30;
+          pdf.addImage(fallbackImg, "JPEG", photoX, photoY, photoSize, photoSize);
+          pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+          pdf.setLineWidth(0.5);
+          pdf.circle(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, "S");
+          photoYOffset = 40;
+          resolve(true);
+        };
+        fallbackImg.onerror = () => resolve(false);
+      };
+    });
+  } catch (error) {
+    console.error("Error loading profile photo:", error);
+  }
 
 
   // Top-right: "Ram Ram Piyush" heading
   pdf.setFontSize(16);
   pdf.setFont("helvetica", "bold");
   pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  pdf.text("Ram Ram ${data.studentName}", 190, 65, { align: "right" });
+  pdf.text(`Ram Ram ${data.studentName}`, 190, 65, { align: "right" });
 
   // Date
   pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
