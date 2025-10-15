@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Edit } from "lucide-react";
+import { Edit, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { studentSchema } from "@/lib/validation";
@@ -17,6 +17,7 @@ type Student = {
   monthly_fee: number;
   joining_date: string;
   remarks: string;
+  profile_photo_url: string | null;
 };
 
 type EditStudentDialogProps = {
@@ -28,6 +29,9 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string>(student.profile_photo_url || "");
+  const [removeExistingPhoto, setRemoveExistingPhoto] = useState(false);
   const [formData, setFormData] = useState({
     name: student.name,
     class: student.class,
@@ -36,6 +40,45 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
     joining_date: student.joining_date,
     remarks: student.remarks || "",
   });
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
+        toast({
+          title: "Invalid file type",
+          description: "Please upload a JPG, PNG, or WEBP image",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Validate file size (5MB)
+      if (file.size > 5242880) {
+        toast({
+          title: "File too large",
+          description: "Image must be less than 5MB",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setRemoveExistingPhoto(false);
+    }
+  };
+
+  const removePhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview("");
+    setRemoveExistingPhoto(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +100,44 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
         throw new Error(errors);
       }
 
+      let photoUrl = student.profile_photo_url;
+
+      // Handle photo removal
+      if (removeExistingPhoto && student.profile_photo_url) {
+        const oldFileName = student.profile_photo_url.split('/').pop();
+        if (oldFileName) {
+          await supabase.storage.from('student-photos').remove([oldFileName]);
+        }
+        photoUrl = null;
+      }
+
+      // Handle new photo upload
+      if (photoFile) {
+        // Delete old photo if exists
+        if (student.profile_photo_url) {
+          const oldFileName = student.profile_photo_url.split('/').pop();
+          if (oldFileName) {
+            await supabase.storage.from('student-photos').remove([oldFileName]);
+          }
+        }
+
+        // Upload new photo
+        const fileExt = photoFile.name.split('.').pop();
+        const fileName = `${crypto.randomUUID()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('student-photos')
+          .upload(fileName, photoFile);
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('student-photos')
+          .getPublicUrl(fileName);
+        
+        photoUrl = publicUrl;
+      }
+
       const { error } = await supabase
         .from("students")
         .update({
@@ -66,6 +147,7 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
           monthly_fee: validationResult.data.monthly_fee,
           joining_date: validationResult.data.joining_date,
           remarks: validationResult.data.remarks || null,
+          profile_photo_url: photoUrl,
         })
         .eq("id", student.id);
 
@@ -154,6 +236,33 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
                 onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
                 required
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="photo">Profile Photo (Optional)</Label>
+              <Input
+                id="photo"
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp"
+                onChange={handlePhotoChange}
+              />
+              {photoPreview && !removeExistingPhoto && (
+                <div className="relative mt-2 inline-block">
+                  <img 
+                    src={photoPreview} 
+                    alt="Current photo" 
+                    className="w-24 h-24 rounded-full object-cover border-2 border-border"
+                  />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                    onClick={removePhoto}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="remarks">Remarks (Optional)</Label>

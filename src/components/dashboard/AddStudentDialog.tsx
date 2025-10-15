@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { studentSchema } from "@/lib/validation";
@@ -13,6 +13,8 @@ export const AddStudentDialog = () => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string>("");
   const [formData, setFormData] = useState({
     name: "",
     class: "",
@@ -21,6 +23,43 @@ export const AddStudentDialog = () => {
     joining_date: "",
     remarks: "",
   });
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
+        toast({
+          title: "Invalid file type",
+          description: "Please upload a JPG, PNG, or WEBP image",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Validate file size (5MB)
+      if (file.size > 5242880) {
+        toast({
+          title: "File too large",
+          description: "Image must be less than 5MB",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removePhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +81,25 @@ export const AddStudentDialog = () => {
         throw new Error(errors);
       }
 
+      // Upload photo if selected
+      let photoUrl = null;
+      if (photoFile) {
+        const fileExt = photoFile.name.split('.').pop();
+        const fileName = `${crypto.randomUUID()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('student-photos')
+          .upload(fileName, photoFile);
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('student-photos')
+          .getPublicUrl(fileName);
+        
+        photoUrl = publicUrl;
+      }
+
       const { error } = await supabase.from("students").insert({
         name: validationResult.data.name,
         class: validationResult.data.class,
@@ -49,6 +107,7 @@ export const AddStudentDialog = () => {
         monthly_fee: validationResult.data.monthly_fee,
         joining_date: validationResult.data.joining_date,
         remarks: validationResult.data.remarks || null,
+        profile_photo_url: photoUrl,
       });
 
       if (error) throw error;
@@ -59,6 +118,8 @@ export const AddStudentDialog = () => {
       });
 
       setOpen(false);
+      setPhotoFile(null);
+      setPhotoPreview("");
       setFormData({
         name: "",
         class: "",
@@ -146,6 +207,33 @@ export const AddStudentDialog = () => {
                 onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
                 required
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="photo">Profile Photo (Optional)</Label>
+              <Input
+                id="photo"
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp"
+                onChange={handlePhotoChange}
+              />
+              {photoPreview && (
+                <div className="relative mt-2 inline-block">
+                  <img 
+                    src={photoPreview} 
+                    alt="Preview" 
+                    className="w-24 h-24 rounded-full object-cover border-2 border-border"
+                  />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                    onClick={removePhoto}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="remarks">Remarks (Optional)</Label>

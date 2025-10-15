@@ -7,6 +7,7 @@ export type ReceiptData = {
   pendingMonths: string[];
   totalDue: number;
   joiningDate: string;
+  profilePhotoUrl?: string | null;
 };
 
 export const generateReceipt = async (data: ReceiptData) => {
@@ -33,6 +34,52 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setFont("helvetica", "normal");
   pdf.text("TeachEase Dashboard", 105, 30, { align: "center" });
 
+  // Top-left: Student photo (if available)
+  let photoYOffset = 0;
+  if (data.profilePhotoUrl) {
+    try {
+      const photoImg = new Image();
+      photoImg.crossOrigin = "anonymous";
+      photoImg.src = data.profilePhotoUrl;
+      
+      await new Promise((resolve) => {
+        photoImg.onload = () => {
+          try {
+            const photoX = 20;
+            const photoY = 50;
+            const photoSize = 30;
+            
+            // Draw circular clipping path
+            pdf.saveGraphicsState();
+            pdf.circle(photoX + photoSize/2, photoY + photoSize/2, photoSize/2);
+            pdf.clip();
+            pdf.addImage(photoImg, 'JPEG', photoX, photoY, photoSize, photoSize);
+            pdf.restoreGraphicsState();
+            
+            // Draw circle border
+            pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            pdf.setLineWidth(0.5);
+            pdf.circle(photoX + photoSize/2, photoY + photoSize/2, photoSize/2, 'S');
+            
+            photoYOffset = 40;
+          } catch (error) {
+            console.error("Error adding photo to PDF:", error);
+          }
+          resolve(true);
+        };
+        photoImg.onerror = () => resolve(false);
+      });
+    } catch (error) {
+      console.error("Error loading profile photo:", error);
+    }
+  }
+
+  // Top-right: "Ram Ram Piyush" heading
+  pdf.setFontSize(16);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  pdf.text("Ram Ram Piyush", 190, 65, { align: "right" });
+
   // Date
   pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
   pdf.setFontSize(10);
@@ -41,20 +88,22 @@ export const generateReceipt = async (data: ReceiptData) => {
     month: "long",
     year: "numeric",
   });
-  pdf.text(`Date: ${currentDate}`, 20, 55);
+  pdf.text(`Date: ${currentDate}`, 20, 55 + photoYOffset);
 
   // Student Details Section
+  let yPos = 70 + photoYOffset;
   pdf.setFontSize(14);
   pdf.setFont("helvetica", "bold");
-  pdf.text("Student Details", 20, 70);
+  pdf.text("Student Details", 20, yPos);
   
+  yPos += 2;
   pdf.setDrawColor(200, 200, 200);
-  pdf.line(20, 72, 190, 72);
+  pdf.line(20, yPos, 190, yPos);
 
   pdf.setFontSize(11);
   pdf.setFont("helvetica", "normal");
   
-  let yPos = 82;
+  yPos += 10;
   const lineHeight = 8;
   
   pdf.setFont("helvetica", "bold");

@@ -67,6 +67,7 @@ export type Database = {
           joining_date: string
           monthly_fee: number
           name: string
+          profile_photo_url: string | null
           remarks: string | null
         }
         Insert: {
@@ -77,6 +78,7 @@ export type Database = {
           joining_date: string
           monthly_fee: number
           name: string
+          profile_photo_url?: string | null
           remarks?: string | null
         }
         Update: {
@@ -87,6 +89,7 @@ export type Database = {
           joining_date?: string
           monthly_fee?: number
           name?: string
+          profile_photo_url?: string | null
           remarks?: string | null
         }
         Relationships: []

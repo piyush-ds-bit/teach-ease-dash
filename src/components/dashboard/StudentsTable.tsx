@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Search } from "lucide-react";
+import { Eye, Search, User } from "lucide-react";
 
 type Student = {
   id: string;
@@ -14,6 +14,7 @@ type Student = {
   contact_number: string;
   monthly_fee: number;
   joining_date: string;
+  profile_photo_url: string | null;
 };
 
 export const StudentsTable = () => {
@@ -83,6 +84,9 @@ export const StudentsTable = () => {
           <thead className="bg-muted/50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Photo
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -112,6 +116,19 @@ export const StudentsTable = () => {
               
               return (
                 <tr key={student.id} className="hover:bg-muted/50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                      {student.profile_photo_url ? (
+                        <img 
+                          src={student.profile_photo_url} 
+                          alt={student.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap font-medium">
                     {student.name}
                   </td>

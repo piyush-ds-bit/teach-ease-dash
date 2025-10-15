@@ -10,6 +10,7 @@ type GenerateReceiptButtonProps = {
   totalDue: number;
   joiningDate: string;
   pendingMonths: string[];
+  profilePhotoUrl?: string | null;
 };
 
 export const GenerateReceiptButton = ({
@@ -19,6 +20,7 @@ export const GenerateReceiptButton = ({
   totalDue,
   joiningDate,
   pendingMonths,
+  profilePhotoUrl,
 }: GenerateReceiptButtonProps) => {
   const handleGenerateReceipt = async () => {
     try {
@@ -29,6 +31,7 @@ export const GenerateReceiptButton = ({
         pendingMonths,
         totalDue,
         joiningDate,
+        profilePhotoUrl,
       };
 
       await generateReceipt(receiptData);

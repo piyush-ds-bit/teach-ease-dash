@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Phone, Calendar, DollarSign, Edit, Eye, EyeOff } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ArrowLeft, Phone, Calendar, DollarSign, Edit, Eye, EyeOff, User } from "lucide-react";
 import { PaymentHistory } from "@/components/student/PaymentHistory";
 import { AddPaymentDialog } from "@/components/student/AddPaymentDialog";
 import { EditStudentDialog } from "@/components/student/EditStudentDialog";
@@ -19,6 +20,7 @@ type Student = {
   monthly_fee: number;
   joining_date: string;
   remarks: string;
+  profile_photo_url: string | null;
 };
 
 const StudentProfile = () => {
@@ -29,6 +31,7 @@ const StudentProfile = () => {
   const [totalPaid, setTotalPaid] = useState(0);
   const [totalDue, setTotalDue] = useState(0);
   const [pendingMonths, setPendingMonths] = useState<string[]>([]);
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
 
   const [cardVisibility, setCardVisibility] = useState({
     monthlyFee: true,
@@ -113,11 +116,29 @@ const StudentProfile = () => {
           Back to Dashboard
         </Button>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
+        <div className="flex items-center gap-6">
+          <div 
+            className="w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-muted flex items-center justify-center border-4 border-primary cursor-pointer flex-shrink-0"
+            onClick={() => student.profile_photo_url && setPhotoModalOpen(true)}
+          >
+            {student.profile_photo_url ? (
+              <img 
+                src={student.profile_photo_url} 
+                alt={student.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <User className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground" />
+            )}
+          </div>
+          <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold">{student.name}</h1>
             <p className="text-muted-foreground">Class {student.class}</p>
           </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div></div>
           <div className="flex flex-wrap gap-2">
             {totalDue > 0 && (
               <GenerateReceiptButton
@@ -127,6 +148,7 @@ const StudentProfile = () => {
                 totalDue={totalDue}
                 joiningDate={student.joining_date}
                 pendingMonths={pendingMonths}
+                profilePhotoUrl={student.profile_photo_url}
               />
             )}
             <EditStudentDialog student={student} onUpdate={loadData} />
@@ -267,6 +289,18 @@ const StudentProfile = () => {
         </div>
 
         <PaymentHistory studentId={student.id} />
+
+        {student.profile_photo_url && (
+          <Dialog open={photoModalOpen} onOpenChange={setPhotoModalOpen}>
+            <DialogContent className="max-w-2xl">
+              <img 
+                src={student.profile_photo_url} 
+                alt={student.name}
+                className="w-full h-auto rounded-lg"
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </main>
     </div>
   );
