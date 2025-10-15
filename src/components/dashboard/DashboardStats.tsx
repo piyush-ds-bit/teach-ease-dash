@@ -12,18 +12,50 @@ export const DashboardStats = () => {
   });
 
   const [visibility, setVisibility] = useState({
-    totalStudents: true,
-    feesCollected: true,
-    pendingFees: true,
+    totalStudents: false,
+    feesCollected: false,
+    pendingFees: false,
   });
 
-  const toggleVisibility = (key: keyof typeof visibility) => {
-    setVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleVisibility = async (key: keyof typeof visibility) => {
+    const newVisibility = { ...visibility, [key]: !visibility[key] };
+    setVisibility(newVisibility);
+    
+    // Save to Supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: user.id,
+          dashboard_stats_visible: newVisibility.totalStudents || newVisibility.feesCollected || newVisibility.pendingFees,
+        });
+    }
   };
 
   useEffect(() => {
     loadStats();
+    loadPreferences();
   }, []);
+
+  const loadPreferences = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data } = await supabase
+        .from('user_preferences')
+        .select('dashboard_stats_visible')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (data?.dashboard_stats_visible) {
+        setVisibility({
+          totalStudents: true,
+          feesCollected: true,
+          pendingFees: true,
+        });
+      }
+    }
+  };
 
   const loadStats = async () => {
     const { data: students } = await supabase.from("students").select("*");

@@ -40,11 +40,11 @@ export const StudentsTable = () => {
     const joiningDate = new Date(student.joining_date);
     const now = new Date();
     
-    // Calculate months enrolled, excluding joining month
+    // Calculate months from joining to previous month (EXCLUDE joining month AND current month)
     const monthsEnrolled = (now.getFullYear() - joiningDate.getFullYear()) * 12 + 
                            (now.getMonth() - joiningDate.getMonth());
     
-    // If joining month is current month or in future, no due yet
+    // This gives us months between joining and current (excluding both)
     const monthsDiff = Math.max(0, monthsEnrolled);
     
     return monthsDiff * student.monthly_fee;

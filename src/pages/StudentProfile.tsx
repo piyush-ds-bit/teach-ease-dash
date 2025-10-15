@@ -34,20 +34,52 @@ const StudentProfile = () => {
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
 
   const [cardVisibility, setCardVisibility] = useState({
-    monthlyFee: true,
-    totalPaid: true,
-    totalDue: true,
+    monthlyFee: false,
+    totalPaid: false,
+    totalDue: false,
   });
 
-  const toggleCardVisibility = (key: keyof typeof cardVisibility) => {
-    setCardVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleCardVisibility = async (key: keyof typeof cardVisibility) => {
+    const newVisibility = { ...cardVisibility, [key]: !cardVisibility[key] };
+    setCardVisibility(newVisibility);
+    
+    // Save to Supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: user.id,
+          profile_cards_visible: newVisibility.monthlyFee || newVisibility.totalPaid || newVisibility.totalDue,
+        });
+    }
   };
 
   useEffect(() => {
     if (id) {
       loadData();
+      loadPreferences();
     }
   }, [id]);
+
+  const loadPreferences = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data } = await supabase
+        .from('user_preferences')
+        .select('profile_cards_visible')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (data?.profile_cards_visible) {
+        setCardVisibility({
+          monthlyFee: true,
+          totalPaid: true,
+          totalDue: true,
+        });
+      }
+    }
+  };
 
   const loadData = async () => {
     // Load both student and payments data
@@ -63,21 +95,21 @@ const StudentProfile = () => {
       const total = paymentsResult.data?.reduce((sum, p) => sum + Number(p.amount_paid), 0) || 0;
       setTotalPaid(total);
       
-      // Calculate due amount and pending months (excluding joining month)
+      // Calculate due amount and pending months (EXCLUDING joining month AND current month)
       const joiningDate = new Date(studentResult.data.joining_date);
       const now = new Date();
       
-      // Calculate months enrolled, excluding joining month
+      // Calculate months from joining to previous month (exclude current month)
       const monthsEnrolled = (now.getFullYear() - joiningDate.getFullYear()) * 12 + 
                              (now.getMonth() - joiningDate.getMonth());
       
-      // If joining month is current month or in future, no due yet
+      // Subtract 1 to exclude joining month, ensure non-negative
       const monthsDiff = Math.max(0, monthsEnrolled);
       const totalExpected = monthsDiff * studentResult.data.monthly_fee;
       const dueAmount = Math.max(0, totalExpected - total);
       setTotalDue(dueAmount);
       
-      // Calculate pending months (start from month 1, not month 0)
+      // Calculate pending months (start from first month after joining, end before current month)
       const paidMonths = new Set(paymentsResult.data?.map(p => p.month) || []);
       const pending: string[] = [];
       
