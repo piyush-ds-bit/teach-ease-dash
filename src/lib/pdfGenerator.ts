@@ -78,7 +78,7 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setFontSize(16);
   pdf.setFont("helvetica", "bold");
   pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  pdf.text("Ram Ram Piyush", 190, 65, { align: "right" });
+  pdf.text("Ram Ram ${data.studentName}", 190, 65, { align: "right" });
 
   // Date
   pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
@@ -127,7 +127,7 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setFont("helvetica", "bold");
   pdf.text("Monthly Fee:", 20, yPos);
   pdf.setFont("helvetica", "normal");
-  pdf.text(`₹${data.monthlyFee.toLocaleString("en-IN")}`, 60, yPos);
+  pdf.text(`Rs. ${data.monthlyFee.toLocaleString("en-IN")}`, 60, yPos);
 
   // Fee Details Section
   yPos += lineHeight + 8;
@@ -167,7 +167,7 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setFont("helvetica", "bold");
   pdf.setTextColor(217, 119, 6);
   pdf.text("TOTAL DUE:", 30, yPos + 5);
-  pdf.text(`₹${data.totalDue.toLocaleString("en-IN")}`, 160, yPos + 5, { align: "right" });
+  pdf.text(`Rs. ${data.totalDue.toLocaleString("en-IN")}`, 160, yPos + 5, { align: "right" });
 
   // Signature Section
   yPos += 35;
