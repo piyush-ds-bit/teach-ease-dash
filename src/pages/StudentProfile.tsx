@@ -75,8 +75,8 @@ const StudentProfile = () => {
       if (data?.profile_cards_visible) {
         setCardVisibility({
           monthlyFee: false,
-          totalPaid: true,
-          totalDue: true,
+          totalPaid: false,
+          totalDue: false,
         });
       }
     }
