@@ -3,8 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, DollarSign, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export const DashboardStats = () => {
+  const { toast } = useToast();
   const [stats, setStats] = useState({
     totalStudents: 0,
     totalCollected: 0,
@@ -36,6 +38,30 @@ export const DashboardStats = () => {
   useEffect(() => {
     loadStats();
     loadPreferences();
+
+    // Subscribe to payment changes for real-time updates
+    const channel = supabase
+      .channel('dashboard-stats-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'payments'
+        },
+        () => {
+          loadStats();
+          toast({
+            title: "Dashboard Updated",
+            description: "Payment data has been refreshed",
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadPreferences = async () => {

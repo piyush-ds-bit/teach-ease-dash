@@ -26,6 +26,43 @@ export const StudentsTable = () => {
 
   useEffect(() => {
     loadStudents();
+
+    // Subscribe to payment changes for real-time updates
+    const paymentsChannel = supabase
+      .channel('students-table-payment-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'payments'
+        },
+        () => {
+          loadStudents();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to student changes as well
+    const studentsChannel = supabase
+      .channel('students-table-student-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'students'
+        },
+        () => {
+          loadStudents();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(paymentsChannel);
+      supabase.removeChannel(studentsChannel);
+    };
   }, []);
 
   const loadStudents = async () => {
