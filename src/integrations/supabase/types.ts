@@ -58,6 +58,33 @@ export type Database = {
           },
         ]
       }
+      routines: {
+        Row: {
+          created_at: string
+          day_of_week: string
+          end_time: string
+          id: string
+          notes: string | null
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: string
+          end_time: string
+          id?: string
+          notes?: string | null
+          start_time: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: string
+          end_time?: string
+          id?: string
+          notes?: string | null
+          start_time?: string
+        }
+        Relationships: []
+      }
       students: {
         Row: {
           class: string
@@ -69,6 +96,7 @@ export type Database = {
           name: string
           profile_photo_url: string | null
           remarks: string | null
+          subject: string | null
         }
         Insert: {
           class: string
@@ -80,6 +108,7 @@ export type Database = {
           name: string
           profile_photo_url?: string | null
           remarks?: string | null
+          subject?: string | null
         }
         Update: {
           class?: string
@@ -91,6 +120,7 @@ export type Database = {
           name?: string
           profile_photo_url?: string | null
           remarks?: string | null
+          subject?: string | null
         }
         Relationships: []
       }

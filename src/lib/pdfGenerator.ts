@@ -7,6 +7,7 @@ export type ReceiptData = {
   pendingMonths: string[];
   totalDue: number;
   joiningDate: string;
+  subject?: string | null;
   profilePhotoUrl?: string | null;
 };
 
@@ -160,6 +161,14 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.text("Joining Date:", 20, yPos);
   pdf.setFont("helvetica", "normal");
   pdf.text(new Date(data.joiningDate).toLocaleDateString("en-IN"), 60, yPos);
+  
+  if (data.subject) {
+    yPos += lineHeight;
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Subject:", 20, yPos);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(data.subject, 60, yPos);
+  }
   
   yPos += lineHeight;
   pdf.setFont("helvetica", "bold");

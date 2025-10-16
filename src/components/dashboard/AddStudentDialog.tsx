@@ -21,6 +21,7 @@ export const AddStudentDialog = () => {
     contact_number: "",
     monthly_fee: "",
     joining_date: "",
+    subject: "",
     remarks: "",
   });
 
@@ -106,6 +107,7 @@ export const AddStudentDialog = () => {
         contact_number: validationResult.data.contact_number,
         monthly_fee: validationResult.data.monthly_fee,
         joining_date: validationResult.data.joining_date,
+        subject: formData.subject || null,
         remarks: validationResult.data.remarks || null,
         profile_photo_url: photoUrl,
       });
@@ -126,6 +128,7 @@ export const AddStudentDialog = () => {
         contact_number: "",
         monthly_fee: "",
         joining_date: "",
+        subject: "",
         remarks: "",
       });
       
@@ -206,6 +209,15 @@ export const AddStudentDialog = () => {
                 value={formData.joining_date}
                 onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
                 required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Input
+                id="subject"
+                placeholder="e.g., Mathematics, Science, English"
+                value={formData.subject}
+                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
               />
             </div>
             <div className="grid gap-2">

@@ -14,6 +14,7 @@ type Student = {
   contact_number: string;
   monthly_fee: number;
   joining_date: string;
+  subject: string | null;
   profile_photo_url: string | null;
 };
 

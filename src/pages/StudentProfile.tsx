@@ -19,6 +19,7 @@ type Student = {
   contact_number: string;
   monthly_fee: number;
   joining_date: string;
+  subject: string | null;
   remarks: string;
   profile_photo_url: string | null;
 };
@@ -180,6 +181,7 @@ const StudentProfile = () => {
                 totalDue={totalDue}
                 joiningDate={student.joining_date}
                 pendingMonths={pendingMonths}
+                subject={student.subject}
                 profilePhotoUrl={student.profile_photo_url}
               />
             )}
@@ -299,13 +301,19 @@ const StudentProfile = () => {
 
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle>Contact Information</CardTitle>
+            <CardTitle>Student Details</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-muted-foreground" />
               <span>{student.contact_number}</span>
             </div>
+            {student.subject && (
+              <div>
+                <p className="text-sm text-muted-foreground">Subject:</p>
+                <p>{student.subject}</p>
+              </div>
+            )}
             {student.remarks && (
               <div>
                 <p className="text-sm text-muted-foreground">Remarks:</p>

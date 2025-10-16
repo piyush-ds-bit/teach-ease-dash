@@ -16,6 +16,7 @@ type Student = {
   contact_number: string;
   monthly_fee: number;
   joining_date: string;
+  subject: string | null;
   remarks: string;
   profile_photo_url: string | null;
 };
@@ -38,6 +39,7 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
     contact_number: student.contact_number,
     monthly_fee: student.monthly_fee.toString(),
     joining_date: student.joining_date,
+    subject: student.subject || "",
     remarks: student.remarks || "",
   });
 
@@ -146,6 +148,7 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
           contact_number: validationResult.data.contact_number,
           monthly_fee: validationResult.data.monthly_fee,
           joining_date: validationResult.data.joining_date,
+          subject: formData.subject || null,
           remarks: validationResult.data.remarks || null,
           profile_photo_url: photoUrl,
         })
@@ -235,6 +238,15 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
                 value={formData.joining_date}
                 onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
                 required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Input
+                id="subject"
+                placeholder="e.g., Mathematics, Science, English"
+                value={formData.subject}
+                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
               />
             </div>
             <div className="grid gap-2">
