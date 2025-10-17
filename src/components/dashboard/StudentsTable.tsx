@@ -16,6 +16,7 @@ type Student = {
   joining_date: string;
   subject: string | null;
   profile_photo_url: string | null;
+  total_paid?: number;
 };
 
 export const StudentsTable = () => {
@@ -66,26 +67,49 @@ export const StudentsTable = () => {
   }, []);
 
   const loadStudents = async () => {
-    const { data } = await supabase
+    const { data: studentsData } = await supabase
       .from("students")
       .select("*")
       .order("name");
-    setStudents(data || []);
+    
+    const { data: paymentsData } = await supabase
+      .from("payments")
+      .select("student_id, amount_paid");
+    
+    // Calculate total_paid for each student
+    const studentsWithTotalPaid = studentsData?.map(student => {
+      const studentPayments = paymentsData?.filter(p => p.student_id === student.id) || [];
+      const total_paid = studentPayments.reduce((sum, p) => sum + Number(p.amount_paid), 0);
+      return { ...student, total_paid };
+    }) || [];
+    
+    setStudents(studentsWithTotalPaid);
     setLoading(false);
   };
 
   const calculateDue = (student: Student) => {
     const joiningDate = new Date(student.joining_date);
     const now = new Date();
-    
-    // Calculate months from joining to previous month (EXCLUDE joining month AND current month)
-    const monthsEnrolled = (now.getFullYear() - joiningDate.getFullYear()) * 12 + 
-                           (now.getMonth() - joiningDate.getMonth());
-    
-    // This gives us months between joining and current (excluding both)
-    const monthsDiff = Math.max(0, monthsEnrolled);
-    
-    return monthsDiff * student.monthly_fee;
+
+    // Step 1: Calculate how many months have passed since joining (excluding joining month)
+    let monthsDiff =
+      (now.getFullYear() - joiningDate.getFullYear()) * 12 +
+      (now.getMonth() - joiningDate.getMonth());
+
+    // Exclude the joining month
+    if (monthsDiff > 0) monthsDiff -= 1;
+
+    // Prevent negative due if joined recently
+    monthsDiff = Math.max(0, monthsDiff);
+
+    // Step 2: Calculate total payable till now
+    const totalPayable = monthsDiff * student.monthly_fee;
+
+    // Step 3: Subtract payments made so far
+    const totalPaid = student.total_paid || 0;
+    const totalDue = Math.max(0, totalPayable - totalPaid);
+
+    return totalDue;
   };
 
   const getPaymentStatus = (due: number) => {
