@@ -91,28 +91,32 @@ export const StudentsTable = () => {
     const joiningDate = new Date(student.joining_date);
     const now = new Date();
   
-    // Step 1: Calculate full months completed since joining (include joining month if fully completed)
+    // Calculate the number of months fully completed since joining
     let monthsDiff =
       (now.getFullYear() - joiningDate.getFullYear()) * 12 +
       (now.getMonth() - joiningDate.getMonth());
   
-    // If current day is before the joining day, the current month isn't fully completed
+    // ❗ Don't count the current (incomplete) month
+    // If today's date is still before the same date in the next month,
+    // that means the month isn't complete yet.
     if (now.getDate() < joiningDate.getDate()) {
       monthsDiff -= 1;
     }
   
-    // Prevent negative months
-    monthsDiff = Math.max(0, monthsDiff + 1); // +1 to include joining month once it completes
+    // Prevent negative values for recent joins
+    monthsDiff = Math.max(0, monthsDiff);
   
-    // Step 2: Calculate total payable till now
+    // Total fee till now (after completed months only)
     const totalPayable = monthsDiff * student.monthly_fee;
   
-    // Step 3: Subtract total payments made
+    // Subtract payments already made
     const totalPaid = student.total_paid || 0;
+  
     const totalDue = Math.max(0, totalPayable - totalPaid);
   
     return totalDue;
   };
+
 
 
   const getPaymentStatus = (due: number) => {
