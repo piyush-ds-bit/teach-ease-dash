@@ -116,10 +116,13 @@ export const StudentsTable = () => {
 
 
   const getPaymentStatus = (due: number) => {
-    if (due <= 0) return { label: "Paid", variant: "default" as const };
-    if (due < 5000) return { label: "Partial", variant: "secondary" as const };
-    return { label: "Pending", variant: "destructive" as const };
+    if (due <= 0) {
+      return { label: "Paid", variant: "default" as const }; // Green
+    } else {
+      return { label: "Pending", variant: "destructive" as const }; // Red
+    }
   };
+
 
   const filteredStudents = students.filter(
     (s) =>
