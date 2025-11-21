@@ -121,9 +121,9 @@ export const StudentsTable = () => {
 
   const getPaymentStatus = (due: number) => {
     if (due <= 0) {
-      return { label: "Paid", variant: "success" as const }; // Green
+      return { label: "Paid", variant: "default" as const };
     } else {
-      return { label: "Pending", variant: "destructive" as const }; // Red
+      return { label: "Pending", variant: "destructive" as const };
     }
   };
 

@@ -8,6 +8,7 @@ import { Edit, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { studentSchema } from "@/lib/validation";
+import { ResetPasswordDialog } from "./ResetPasswordDialog";
 
 type Student = {
   id: string;
@@ -175,13 +176,14 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <Edit className="h-4 w-4 mr-2" />
-          Edit Details
-        </Button>
-      </DialogTrigger>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline">
+            <Edit className="h-4 w-4 mr-2" />
+            Edit Details
+          </Button>
+        </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Edit Student Details</DialogTitle>
@@ -292,6 +294,8 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+      <ResetPasswordDialog studentId={student.id} studentName={student.name} />
+    </>
   );
 };

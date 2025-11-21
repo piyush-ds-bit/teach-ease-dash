@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Phone, Calendar, DollarSign, Edit, Eye, EyeOff, User } from "lucide-react";
 import { PaymentHistory } from "@/components/student/PaymentHistory";
 import { AddPaymentDialog } from "@/components/student/AddPaymentDialog";
@@ -11,6 +12,7 @@ import { EditStudentDialog } from "@/components/student/EditStudentDialog";
 import { DeleteStudentDialog } from "@/components/student/DeleteStudentDialog";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { GenerateReceiptButton } from "@/components/student/GenerateReceiptButton";
+import { HomeworkList } from "@/components/homework/HomeworkList";
 
 type Student = {
   id: string;
@@ -323,12 +325,24 @@ const StudentProfile = () => {
           </CardContent>
         </Card>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h2 className="text-xl sm:text-2xl font-bold">Payment History</h2>
-          <AddPaymentDialog studentId={student.id} onPaymentAdded={loadData} />
-        </div>
+        <Tabs defaultValue="payments" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="payments">Payment History</TabsTrigger>
+            <TabsTrigger value="homework">Homework</TabsTrigger>
+          </TabsList>
 
-        <PaymentHistory studentId={student.id} />
+          <TabsContent value="payments" className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <h2 className="text-xl sm:text-2xl font-bold">Payment History</h2>
+              <AddPaymentDialog studentId={student.id} onPaymentAdded={loadData} />
+            </div>
+            <PaymentHistory studentId={student.id} />
+          </TabsContent>
+
+          <TabsContent value="homework">
+            <HomeworkList studentId={student.id} />
+          </TabsContent>
+        </Tabs>
 
         {student.profile_photo_url && (
           <Dialog open={photoModalOpen} onOpenChange={setPhotoModalOpen}>
