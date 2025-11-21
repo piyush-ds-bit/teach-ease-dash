@@ -16,6 +16,7 @@ import StudentPayments from "./pages/StudentPayments";
 import StudentRoutineView from "./pages/StudentRoutineView";
 import StudentHomework from "./pages/StudentHomework";
 import { ProtectedStudentRoute } from "./components/student/ProtectedStudentRoute";
+import GenerateCredentials from "./pages/GenerateCredentials";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,9 @@ const App = () => (
           <Route path="/student-payments" element={<ProtectedStudentRoute><StudentPayments /></ProtectedStudentRoute>} />
           <Route path="/student-routine" element={<ProtectedStudentRoute><StudentRoutineView /></ProtectedStudentRoute>} />
           <Route path="/student-homework" element={<ProtectedStudentRoute><StudentHomework /></ProtectedStudentRoute>} />
+          
+          {/* Admin Tools */}
+          <Route path="/admin/generate-credentials" element={<GenerateCredentials />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
