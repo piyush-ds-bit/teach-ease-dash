@@ -9,6 +9,13 @@ import Dashboard from "./pages/Dashboard";
 import StudentProfile from "./pages/StudentProfile";
 import Routine from "./pages/Routine";
 import NotFound from "./pages/NotFound";
+import StudentLogin from "./pages/StudentLogin";
+import StudentDashboard from "./pages/StudentDashboard";
+import StudentProfileView from "./pages/StudentProfileView";
+import StudentPayments from "./pages/StudentPayments";
+import StudentRoutineView from "./pages/StudentRoutineView";
+import StudentHomework from "./pages/StudentHomework";
+import { ProtectedStudentRoute } from "./components/student/ProtectedStudentRoute";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +31,15 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/routine" element={<Routine />} />
           <Route path="/student/:id" element={<StudentProfile />} />
+          
+          {/* Student Portal Routes */}
+          <Route path="/student-login" element={<StudentLogin />} />
+          <Route path="/student-dashboard" element={<ProtectedStudentRoute><StudentDashboard /></ProtectedStudentRoute>} />
+          <Route path="/student-profile" element={<ProtectedStudentRoute><StudentProfileView /></ProtectedStudentRoute>} />
+          <Route path="/student-payments" element={<ProtectedStudentRoute><StudentPayments /></ProtectedStudentRoute>} />
+          <Route path="/student-routine" element={<ProtectedStudentRoute><StudentRoutineView /></ProtectedStudentRoute>} />
+          <Route path="/student-homework" element={<ProtectedStudentRoute><StudentHomework /></ProtectedStudentRoute>} />
+          
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

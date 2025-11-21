@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      homework: {
+        Row: {
+          completed: boolean | null
+          created_at: string | null
+          description: string
+          due_date: string
+          id: string
+          student_id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          completed?: boolean | null
+          created_at?: string | null
+          description: string
+          due_date: string
+          id?: string
+          student_id: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          completed?: boolean | null
+          created_at?: string | null
+          description?: string
+          due_date?: string
+          id?: string
+          student_id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "homework_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount_paid: number
@@ -92,8 +133,10 @@ export type Database = {
           created_at: string
           id: string
           joining_date: string
+          login_id: string | null
           monthly_fee: number
           name: string
+          password_hash: string | null
           profile_photo_url: string | null
           remarks: string | null
           subject: string | null
@@ -104,8 +147,10 @@ export type Database = {
           created_at?: string
           id?: string
           joining_date: string
+          login_id?: string | null
           monthly_fee: number
           name: string
+          password_hash?: string | null
           profile_photo_url?: string | null
           remarks?: string | null
           subject?: string | null
@@ -116,8 +161,10 @@ export type Database = {
           created_at?: string
           id?: string
           joining_date?: string
+          login_id?: string | null
           monthly_fee?: number
           name?: string
+          password_hash?: string | null
           profile_photo_url?: string | null
           remarks?: string | null
           subject?: string | null

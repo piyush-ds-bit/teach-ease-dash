@@ -8,6 +8,8 @@ import { Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { studentSchema } from "@/lib/validation";
+import { generateStudentId, generateRandomPassword, hashPassword } from "@/lib/studentAuth";
+import { CredentialsDialog } from "@/components/student/CredentialsDialog";
 
 export const AddStudentDialog = () => {
   const { toast } = useToast();
@@ -15,6 +17,8 @@ export const AddStudentDialog = () => {
   const [loading, setLoading] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
+  const [credentialsOpen, setCredentialsOpen] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState({ loginId: "", password: "" });
   const [formData, setFormData] = useState({
     name: "",
     class: "",
@@ -82,6 +86,11 @@ export const AddStudentDialog = () => {
         throw new Error(errors);
       }
 
+      // Generate student credentials
+      const loginId = await generateStudentId();
+      const password = generateRandomPassword();
+      const passwordHash = await hashPassword(password);
+
       // Upload photo if selected
       let photoUrl = null;
       if (photoFile) {
@@ -110,9 +119,14 @@ export const AddStudentDialog = () => {
         subject: formData.subject || null,
         remarks: validationResult.data.remarks || null,
         profile_photo_url: photoUrl,
+        login_id: loginId,
+        password_hash: passwordHash,
       });
 
       if (error) throw error;
+
+      // Show generated credentials
+      setGeneratedCredentials({ loginId, password });
 
       toast({
         title: "Success",
@@ -120,19 +134,14 @@ export const AddStudentDialog = () => {
       });
 
       setOpen(false);
+      setCredentialsOpen(true);
       setPhotoFile(null);
       setPhotoPreview("");
-      setFormData({
-        name: "",
-        class: "",
-        contact_number: "",
-        monthly_fee: "",
-        joining_date: "",
-        subject: "",
-        remarks: "",
-      });
       
-      window.location.reload();
+      // Reload after credentials dialog is closed
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -264,6 +273,13 @@ export const AddStudentDialog = () => {
           </DialogFooter>
         </form>
       </DialogContent>
+      <CredentialsDialog
+        open={credentialsOpen}
+        onOpenChange={setCredentialsOpen}
+        loginId={generatedCredentials.loginId}
+        password={generatedCredentials.password}
+        studentName={formData.name}
+      />
     </Dialog>
   );
 };

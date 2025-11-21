@@ -1,10 +1,28 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, TrendingUp, Users, DollarSign } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GraduationCap, TrendingUp, Users, DollarSign, User, Shield } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { getStudentSession } from "@/lib/studentAuth";
 
 const Index = () => {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check for existing admin session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate("/dashboard");
+      }
+    });
+
+    // Check for existing student session
+    const studentSession = getStudentSession();
+    if (studentSession) {
+      navigate("/student-dashboard");
+    }
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background">
@@ -26,13 +44,44 @@ const Index = () => {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-            <Button size="lg" onClick={() => navigate("/auth")} className="shadow-hover">
-              Get Started
-            </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/auth")}>
-              Admin Login
-            </Button>
+          <div className="grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto pt-8">
+            <Card className="cursor-pointer hover:shadow-hover transition-shadow" onClick={() => navigate("/auth")}>
+              <CardHeader>
+                <div className="flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Shield className="h-6 w-6 text-primary" />
+                  </div>
+                </div>
+                <CardTitle className="text-center">Admin Login</CardTitle>
+                <CardDescription className="text-center">
+                  Manage students, payments, and homework
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" size="lg">
+                  Login as Admin
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="cursor-pointer hover:shadow-hover transition-shadow" onClick={() => navigate("/student-login")}>
+              <CardHeader>
+                <div className="flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center">
+                    <User className="h-6 w-6 text-success" />
+                  </div>
+                </div>
+                <CardTitle className="text-center">Student Login</CardTitle>
+                <CardDescription className="text-center">
+                  View your profile, payments, and homework
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" variant="outline" size="lg">
+                  Login as Student
+                </Button>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 pt-16 max-w-4xl mx-auto">
