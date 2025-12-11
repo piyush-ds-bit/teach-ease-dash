@@ -6,10 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, Calendar } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { countPausedMonthsInRange } from "@/lib/dueCalculation";
 
 interface Student {
   monthly_fee: number;
   joining_date: string;
+  paused_months: string[] | null;
 }
 
 interface Payment {
@@ -39,7 +41,7 @@ const StudentPayments = () => {
     try {
       const { data: studentData } = await supabase
         .from("students")
-        .select("monthly_fee, joining_date")
+        .select("monthly_fee, joining_date, paused_months")
         .eq("id", session.studentId)
         .single();
 
@@ -76,7 +78,13 @@ const StudentPayments = () => {
     if (monthsDiff > 0) monthsDiff -= 1;
     monthsDiff = Math.max(0, monthsDiff);
 
-    const totalPayable = monthsDiff * student.monthly_fee;
+    // Count paused months within the eligible range
+    const pausedCount = countPausedMonthsInRange(student.paused_months, joiningDate, now);
+    
+    // Effective months = total months - paused months
+    const effectiveMonths = Math.max(0, monthsDiff - pausedCount);
+
+    const totalPayable = effectiveMonths * student.monthly_fee;
     const totalPaid = payments.reduce((sum, p) => sum + p.amount_paid, 0);
     return Math.max(0, totalPayable - totalPaid);
   };

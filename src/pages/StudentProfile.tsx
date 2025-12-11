@@ -13,6 +13,8 @@ import { DeleteStudentDialog } from "@/components/student/DeleteStudentDialog";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { GenerateReceiptButton } from "@/components/student/GenerateReceiptButton";
 import { HomeworkList } from "@/components/homework/HomeworkList";
+import { PauseMonthSection } from "@/components/student/PauseMonthSection";
+import { countPausedMonthsInRange } from "@/lib/dueCalculation";
 
 type Student = {
   id: string;
@@ -24,6 +26,7 @@ type Student = {
   subject: string | null;
   remarks: string;
   profile_photo_url: string | null;
+  paused_months: string[] | null;
 };
 
 const StudentProfile = () => {
@@ -108,19 +111,31 @@ const StudentProfile = () => {
       
       // Subtract 1 to exclude joining month, ensure non-negative
       const monthsDiff = Math.max(0, monthsEnrolled);
-      const totalExpected = monthsDiff * studentResult.data.monthly_fee;
+      
+      // Count paused months within the eligible range
+      const pausedMonths = studentResult.data.paused_months || [];
+      const pausedCount = countPausedMonthsInRange(pausedMonths, joiningDate, now);
+      
+      // Effective months = total months - paused months
+      const effectiveMonths = Math.max(0, monthsDiff - pausedCount);
+      const totalExpected = effectiveMonths * studentResult.data.monthly_fee;
       const dueAmount = Math.max(0, totalExpected - total);
       setTotalDue(dueAmount);
       
       // Calculate pending months (start from first month after joining, end before current month)
+      // Skip months that are paid OR paused
       const paidMonths = new Set(paymentsResult.data?.map(p => p.month) || []);
+      const pausedMonthsSet = new Set(pausedMonths);
       const pending: string[] = [];
       
       for (let i = 1; i <= monthsDiff; i++) {
         const date = new Date(joiningDate);
         date.setMonth(joiningDate.getMonth() + i);
         const monthYear = date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-        if (!paidMonths.has(monthYear)) {
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        
+        // Skip if paused OR already paid
+        if (!paidMonths.has(monthYear) && !pausedMonthsSet.has(monthKey)) {
           pending.push(monthYear);
         }
       }
@@ -185,6 +200,7 @@ const StudentProfile = () => {
                 pendingMonths={pendingMonths}
                 subject={student.subject}
                 profilePhotoUrl={student.profile_photo_url}
+                pausedMonths={student.paused_months || []}
               />
             )}
             <EditStudentDialog student={student} onUpdate={loadData} />
@@ -324,6 +340,12 @@ const StudentProfile = () => {
             )}
           </CardContent>
         </Card>
+
+        <PauseMonthSection
+          studentId={student.id}
+          pausedMonths={student.paused_months || []}
+          onUpdate={loadData}
+        />
 
         <Tabs defaultValue="payments" className="space-y-4">
           <TabsList>

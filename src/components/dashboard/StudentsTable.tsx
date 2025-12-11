@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Search, User } from "lucide-react";
 
+import { countPausedMonthsInRange } from "@/lib/dueCalculation";
+
 type Student = {
   id: string;
   name: string;
@@ -16,6 +18,7 @@ type Student = {
   joining_date: string;
   subject: string | null;
   profile_photo_url: string | null;
+  paused_months: string[] | null;
   total_paid?: number;
 };
 
@@ -106,8 +109,14 @@ export const StudentsTable = () => {
     // Prevent negative values for recent joins
     monthsDiff = Math.max(0, monthsDiff);
   
+    // Count paused months within the eligible range
+    const pausedCount = countPausedMonthsInRange(student.paused_months, joiningDate, now);
+    
+    // Effective months = total months - paused months
+    const effectiveMonths = Math.max(0, monthsDiff - pausedCount);
+  
     // Total fee till now (after completed months only)
-    const totalPayable = monthsDiff * student.monthly_fee;
+    const totalPayable = effectiveMonths * student.monthly_fee;
   
     // Subtract payments already made
     const totalPaid = student.total_paid || 0;
