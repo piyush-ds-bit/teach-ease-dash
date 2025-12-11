@@ -1,5 +1,7 @@
 import { jsPDF } from "jspdf";
 
+import { formatPausedMonth } from "@/lib/dueCalculation";
+
 export type ReceiptData = {
   studentName: string;
   studentId: string;
@@ -9,6 +11,7 @@ export type ReceiptData = {
   joiningDate: string;
   subject?: string | null;
   profilePhotoUrl?: string | null;
+  pausedMonths?: string[];
 };
 
 export const generateReceipt = async (data: ReceiptData) => {
@@ -203,6 +206,22 @@ export const generateReceipt = async (data: ReceiptData) => {
   } else {
     pdf.text("No pending months", 20, yPos);
     yPos += lineHeight;
+  }
+
+  // Paused Months Section (only if paused months exist)
+  if (data.pausedMonths && data.pausedMonths.length > 0) {
+    yPos += 8;
+    pdf.setFontSize(11);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
+    pdf.text("Paused Months:", 20, yPos);
+    
+    yPos += lineHeight;
+    pdf.setFont("helvetica", "normal");
+    const pausedText = data.pausedMonths.map(pm => formatPausedMonth(pm)).join(", ");
+    const splitPaused = pdf.splitTextToSize(pausedText, 170);
+    pdf.text(splitPaused, 20, yPos);
+    yPos += splitPaused.length * lineHeight;
   }
 
   // Total Due Box

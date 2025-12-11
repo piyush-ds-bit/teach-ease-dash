@@ -137,6 +137,7 @@ export type Database = {
           monthly_fee: number
           name: string
           password_hash: string | null
+          paused_months: string[] | null
           profile_photo_url: string | null
           remarks: string | null
           subject: string | null
@@ -151,6 +152,7 @@ export type Database = {
           monthly_fee: number
           name: string
           password_hash?: string | null
+          paused_months?: string[] | null
           profile_photo_url?: string | null
           remarks?: string | null
           subject?: string | null
@@ -165,6 +167,7 @@ export type Database = {
           monthly_fee?: number
           name?: string
           password_hash?: string | null
+          paused_months?: string[] | null
           profile_photo_url?: string | null
           remarks?: string | null
           subject?: string | null
