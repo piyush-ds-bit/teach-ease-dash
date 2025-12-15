@@ -17,6 +17,7 @@ import StudentRoutineView from "./pages/StudentRoutineView";
 import StudentHomework from "./pages/StudentHomework";
 import { ProtectedStudentRoute } from "./components/student/ProtectedStudentRoute";
 import GenerateCredentials from "./pages/GenerateCredentials";
+import { CalculatorButton } from "./components/calculator/CalculatorButton";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <CalculatorButton />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
