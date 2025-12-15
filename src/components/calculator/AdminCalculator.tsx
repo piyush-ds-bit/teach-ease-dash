@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Delete } from "lucide-react";
+import { Trash2, Delete, Keyboard } from "lucide-react";
 import {
   calculateExpression,
   getCalculatorHistory,
@@ -18,10 +18,38 @@ const buttons = [
   ["0", ".", "%", "+"],
 ];
 
+// Map keyboard keys to calculator symbols
+const keyMap: Record<string, string> = {
+  "*": "×",
+  "/": "÷",
+  "x": "×",
+  "X": "×",
+};
+
+const validKeys = new Set([
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+  "+", "-", "*", "/", "%", "(", ")", ".", "x", "X"
+]);
+
 export function AdminCalculator() {
   const [expression, setExpression] = useState("");
   const [result, setResult] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  // Detect touch device
+  useEffect(() => {
+    const checkTouchDevice = () => {
+      const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+      const isSmallScreen = window.innerWidth < 1024;
+      setIsTouchDevice(hasCoarsePointer || isSmallScreen);
+    };
+
+    checkTouchDevice();
+    window.addEventListener("resize", checkTouchDevice);
+    
+    return () => window.removeEventListener("resize", checkTouchDevice);
+  }, []);
 
   useEffect(() => {
     setHistory(getCalculatorHistory());
@@ -36,27 +64,81 @@ export function AdminCalculator() {
     }
   }, [expression]);
 
+  const handleCalculate = useCallback(() => {
+    if (expression && result && result !== "Error") {
+      saveToHistory(expression, result);
+      setHistory(getCalculatorHistory());
+      setExpression(result);
+      setResult("");
+    }
+  }, [expression, result]);
+
+  const handleClear = useCallback(() => {
+    setExpression("");
+    setResult("");
+  }, []);
+
+  const handleBackspace = useCallback(() => {
+    setExpression((prev) => prev.slice(0, -1));
+  }, []);
+
+  const handleInput = useCallback((value: string) => {
+    // Map keyboard symbols to calculator symbols
+    const mappedValue = keyMap[value] || value;
+    setExpression((prev) => prev + mappedValue);
+  }, []);
+
   const handleButtonClick = (value: string) => {
     switch (value) {
       case "C":
-        setExpression("");
-        setResult("");
+        handleClear();
         break;
       case "⌫":
-        setExpression((prev) => prev.slice(0, -1));
+        handleBackspace();
         break;
       case "=":
-        if (expression && result && result !== "Error") {
-          saveToHistory(expression, result);
-          setHistory(getCalculatorHistory());
-          setExpression(result);
-          setResult("");
-        }
+        handleCalculate();
         break;
       default:
-        setExpression((prev) => prev + value);
+        handleInput(value);
     }
   };
+
+  // Keyboard event handler for desktop
+  useEffect(() => {
+    if (isTouchDevice) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent default for calculator keys to avoid conflicts
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleCalculate();
+        return;
+      }
+      
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleClear();
+        return;
+      }
+      
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        handleBackspace();
+        return;
+      }
+
+      // Only allow valid keys
+      if (validKeys.has(e.key)) {
+        e.preventDefault();
+        handleInput(e.key);
+      }
+      // Silently ignore invalid keys
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isTouchDevice, handleCalculate, handleClear, handleBackspace, handleInput]);
 
   const handleHistoryClick = (item: HistoryItem) => {
     setExpression(item.expression);
@@ -86,31 +168,41 @@ export function AdminCalculator() {
         </div>
       </div>
 
-      {/* Button Grid */}
-      <div className="grid gap-2 mb-4">
-        {buttons.map((row, rowIndex) => (
-          <div key={rowIndex} className="grid grid-cols-4 gap-2">
-            {row.map((btn) => (
-              <Button
-                key={btn}
-                variant={getButtonVariant(btn)}
-                className="h-12 text-lg font-medium"
-                onClick={() => handleButtonClick(btn)}
-              >
-                {btn === "⌫" ? <Delete className="h-5 w-5" /> : btn}
-              </Button>
-            ))}
-          </div>
-        ))}
-        {/* Equals button */}
-        <Button
-          variant="default"
-          className="h-12 text-lg font-medium"
-          onClick={() => handleButtonClick("=")}
-        >
-          =
-        </Button>
-      </div>
+      {/* Desktop: Keyboard hint */}
+      {!isTouchDevice && (
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-4 p-2 bg-muted/50 rounded-md">
+          <Keyboard className="h-3.5 w-3.5" />
+          <span>Use keyboard to calculate. Press Enter to evaluate.</span>
+        </div>
+      )}
+
+      {/* Mobile/Tablet: Button Grid */}
+      {isTouchDevice && (
+        <div className="grid gap-2 mb-4">
+          {buttons.map((row, rowIndex) => (
+            <div key={rowIndex} className="grid grid-cols-4 gap-2">
+              {row.map((btn) => (
+                <Button
+                  key={btn}
+                  variant={getButtonVariant(btn)}
+                  className="h-14 text-lg font-medium touch-manipulation"
+                  onClick={() => handleButtonClick(btn)}
+                >
+                  {btn === "⌫" ? <Delete className="h-5 w-5" /> : btn}
+                </Button>
+              ))}
+            </div>
+          ))}
+          {/* Equals button */}
+          <Button
+            variant="default"
+            className="h-14 text-lg font-medium touch-manipulation"
+            onClick={() => handleButtonClick("=")}
+          >
+            =
+          </Button>
+        </div>
+      )}
 
       {/* History Section */}
       <div className="flex-1 border-t pt-4">
