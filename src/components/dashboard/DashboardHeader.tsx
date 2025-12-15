@@ -35,17 +35,17 @@ export const DashboardHeader = () => {
 
   return (
     <TooltipProvider>
-      <header className="border-b bg-card shadow-card">
+      <header className="border-b bg-card shadow-card sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 md:gap-6">
               <Link to="/dashboard" className="flex items-center gap-2 md:gap-3">
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-lg bg-gradient-primary flex items-center justify-center">
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-lg bg-gradient-primary flex items-center justify-center shrink-0">
                   <GraduationCap className="h-5 w-5 md:h-6 md:w-6 text-primary-foreground" />
                 </div>
-                <div className="hidden sm:block">
-                  <h1 className="text-xl font-bold">TeachEase</h1>
-                  <p className="text-sm text-muted-foreground">Tuition Management</p>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-bold">TeachEase</h1>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Tuition Management</p>
                 </div>
               </Link>
               <nav className="flex gap-1 md:gap-2">
