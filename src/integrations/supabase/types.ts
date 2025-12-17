@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      fee_ledger: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          entry_type: string
+          id: string
+          metadata: Json | null
+          month_key: string
+          student_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          entry_type: string
+          id?: string
+          metadata?: Json | null
+          month_key: string
+          student_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          entry_type?: string
+          id?: string
+          metadata?: Json | null
+          month_key?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fee_ledger_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       homework: {
         Row: {
           completed: boolean | null

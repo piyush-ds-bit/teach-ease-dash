@@ -8,6 +8,7 @@ import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { paymentSchema } from "@/lib/validation";
+import { addPaymentEntry, getMonthKey } from "@/lib/ledgerCalculation";
 
 type AddPaymentDialogProps = {
   studentId: string;
@@ -44,8 +45,6 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
-
-      // Store the file path instead of public URL since bucket is now private
       return fileName;
     } catch (error: any) {
       toast({
@@ -59,12 +58,31 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
     }
   };
 
+  // Convert month string to YYYY-MM format for ledger
+  const convertMonthToKey = (monthStr: string): string => {
+    const date = new Date(monthStr);
+    if (isNaN(date.getTime())) {
+      // Try parsing "Month Year" format
+      const parts = monthStr.split(' ');
+      if (parts.length === 2) {
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+        const monthIndex = monthNames.findIndex(m => m.toLowerCase() === parts[0].toLowerCase());
+        if (monthIndex !== -1) {
+          const year = parseInt(parts[1]);
+          return `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+        }
+      }
+      return getMonthKey(new Date());
+    }
+    return getMonthKey(date);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Validate form data
       const validationResult = paymentSchema.safeParse({
         month: formData.month,
         amount_paid: Number(formData.amount_paid),
@@ -83,7 +101,7 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
         proofUrl = await uploadProof(formData.proof_image);
       }
 
-      const { error } = await supabase.from("payments").insert({
+      const { data: paymentData, error } = await supabase.from("payments").insert({
         student_id: studentId,
         month: validationResult.data.month,
         amount_paid: validationResult.data.amount_paid,
@@ -91,9 +109,21 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
         payment_mode: validationResult.data.payment_mode,
         transaction_id: validationResult.data.transaction_id,
         proof_image_url: proofUrl,
-      });
+      }).select().single();
 
       if (error) throw error;
+
+      // Add ledger entry for the payment
+      if (paymentData) {
+        const monthKey = convertMonthToKey(validationResult.data.month);
+        await addPaymentEntry(
+          studentId,
+          monthKey,
+          validationResult.data.amount_paid,
+          paymentData.id,
+          `Payment of ₹${validationResult.data.amount_paid} via ${validationResult.data.payment_mode}`
+        );
+      }
 
       toast({
         title: "Success",

@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, DollarSign, BookOpen, Clock } from "lucide-react";
 import { format, isToday, parseISO } from "date-fns";
+import { countPausedMonthsInRange } from "@/lib/dueCalculation";
 
 interface Student {
   id: string;
@@ -16,6 +17,7 @@ interface Student {
   profile_photo_url: string | null;
   subject: string | null;
   joining_date: string;
+  paused_months: string[] | null;
 }
 
 interface Payment {
@@ -58,7 +60,6 @@ const StudentDashboard = () => {
     if (!session) return;
 
     try {
-      // Load student profile
       const { data: studentData } = await supabase
         .from("students")
         .select("*")
@@ -69,7 +70,6 @@ const StudentDashboard = () => {
         setStudent(studentData);
       }
 
-      // Load recent payments
       const { data: paymentsData } = await supabase
         .from("payments")
         .select("*")
@@ -81,7 +81,6 @@ const StudentDashboard = () => {
         setPayments(paymentsData);
       }
 
-      // Load today's routine
       const today = format(new Date(), "EEEE");
       const { data: routineData } = await supabase
         .from("routines")
@@ -94,7 +93,6 @@ const StudentDashboard = () => {
         setRoutines(routineData);
       }
 
-      // Load pending homework
       const { data: homeworkData } = await supabase
         .from("homework")
         .select("*")
@@ -126,7 +124,13 @@ const StudentDashboard = () => {
     if (monthsDiff > 0) monthsDiff -= 1;
     monthsDiff = Math.max(0, monthsDiff);
 
-    const totalPayable = monthsDiff * student.monthly_fee;
+    // Count paused months within the eligible range
+    const pausedCount = countPausedMonthsInRange(student.paused_months, joiningDate, now);
+    
+    // Effective months = total months - paused months
+    const effectiveMonths = Math.max(0, monthsDiff - pausedCount);
+
+    const totalPayable = effectiveMonths * student.monthly_fee;
     const totalPaid = payments.reduce((sum, p) => sum + p.amount_paid, 0);
     return Math.max(0, totalPayable - totalPaid);
   };
