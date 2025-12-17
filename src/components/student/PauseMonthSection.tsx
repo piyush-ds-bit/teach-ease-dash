@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { PauseCircle, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatPausedMonth } from "@/lib/dueCalculation";
+import { addPauseEntry, removePauseEntry } from "@/lib/ledgerCalculation";
 
 interface PauseMonthSectionProps {
   studentId: string;
@@ -61,6 +62,9 @@ export const PauseMonthSection = ({ studentId, pausedMonths, onUpdate }: PauseMo
 
       if (error) throw error;
 
+      // Add ledger entry for the pause
+      await addPauseEntry(studentId, monthKey);
+
       toast.success(`${formatPausedMonth(monthKey)} has been paused`);
       onUpdate();
       setSelectedMonth("");
@@ -83,6 +87,9 @@ export const PauseMonthSection = ({ studentId, pausedMonths, onUpdate }: PauseMo
         .eq("id", studentId);
 
       if (error) throw error;
+
+      // Remove ledger entry for the pause
+      await removePauseEntry(studentId, monthKey);
 
       toast.success(`${formatPausedMonth(monthKey)} has been unpaused`);
       onUpdate();

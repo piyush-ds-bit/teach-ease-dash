@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Search, User } from "lucide-react";
-
+import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
 import { countPausedMonthsInRange } from "@/lib/dueCalculation";
+import { getStudentStatusFromData } from "@/lib/statusCalculation";
 
 type Student = {
   id: string;
@@ -20,6 +21,7 @@ type Student = {
   profile_photo_url: string | null;
   paused_months: string[] | null;
   total_paid?: number;
+  last_payment_date?: string | null;
 };
 
 export const StudentsTable = () => {
@@ -31,7 +33,6 @@ export const StudentsTable = () => {
   useEffect(() => {
     loadStudents();
 
-    // Subscribe to payment changes for real-time updates
     const paymentsChannel = supabase
       .channel('students-table-payment-changes')
       .on(
@@ -47,7 +48,6 @@ export const StudentsTable = () => {
       )
       .subscribe();
 
-    // Subscribe to student changes as well
     const studentsChannel = supabase
       .channel('students-table-student-changes')
       .on(
@@ -77,16 +77,22 @@ export const StudentsTable = () => {
     
     const { data: paymentsData } = await supabase
       .from("payments")
-      .select("student_id, amount_paid");
+      .select("student_id, amount_paid, payment_date");
     
-    // Calculate total_paid for each student
-    const studentsWithTotalPaid = studentsData?.map(student => {
+    const studentsWithPaymentInfo = studentsData?.map(student => {
       const studentPayments = paymentsData?.filter(p => p.student_id === student.id) || [];
       const total_paid = studentPayments.reduce((sum, p) => sum + Number(p.amount_paid), 0);
-      return { ...student, total_paid };
+      
+      // Find most recent payment date
+      const sortedPayments = [...studentPayments].sort(
+        (a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()
+      );
+      const last_payment_date = sortedPayments[0]?.payment_date || null;
+      
+      return { ...student, total_paid, last_payment_date };
     }) || [];
     
-    setStudents(studentsWithTotalPaid);
+    setStudents(studentsWithPaymentInfo);
     setLoading(false);
   };
 
@@ -94,39 +100,24 @@ export const StudentsTable = () => {
     const joiningDate = new Date(student.joining_date);
     const now = new Date();
   
-    // Calculate the number of months fully completed since joining
     let monthsDiff =
       (now.getFullYear() - joiningDate.getFullYear()) * 12 +
       (now.getMonth() - joiningDate.getMonth());
   
-    // ❗ Don't count the current (incomplete) month
-    // If today's date is still before the same date in the next month,
-    // that means the month isn't complete yet.
     if (now.getDate() < joiningDate.getDate()) {
       monthsDiff -= 1;
     }
   
-    // Prevent negative values for recent joins
     monthsDiff = Math.max(0, monthsDiff);
   
-    // Count paused months within the eligible range
     const pausedCount = countPausedMonthsInRange(student.paused_months, joiningDate, now);
-    
-    // Effective months = total months - paused months
     const effectiveMonths = Math.max(0, monthsDiff - pausedCount);
-  
-    // Total fee till now (after completed months only)
     const totalPayable = effectiveMonths * student.monthly_fee;
-  
-    // Subtract payments already made
     const totalPaid = student.total_paid || 0;
-  
     const totalDue = Math.max(0, totalPayable - totalPaid);
   
     return totalDue;
   };
-
-
 
   const getPaymentStatus = (due: number) => {
     if (due <= 0) {
@@ -135,7 +126,6 @@ export const StudentsTable = () => {
       return { label: "Pending", variant: "destructive" as const };
     }
   };
-
 
   const filteredStudents = students.filter(
     (s) =>
@@ -183,6 +173,9 @@ export const StudentsTable = () => {
                 Total Due
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Payment
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -193,7 +186,11 @@ export const StudentsTable = () => {
           <tbody className="bg-card divide-y divide-border">
             {filteredStudents.map((student) => {
               const totalDue = calculateDue(student);
-              const status = getPaymentStatus(totalDue);
+              const paymentStatus = getPaymentStatus(totalDue);
+              const studentStatus = getStudentStatusFromData(
+                student.paused_months,
+                student.last_payment_date ? [{ payment_date: student.last_payment_date }] : []
+              );
               
               return (
                 <tr key={student.id} className="hover:bg-muted/50 transition-colors">
@@ -226,7 +223,10 @@ export const StudentsTable = () => {
                     ₹{totalDue.toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <Badge variant={paymentStatus.variant}>{paymentStatus.label}</Badge>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <StudentStatusBadge status={studentStatus} size="sm" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Button

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Phone, Calendar, DollarSign, Edit, Eye, EyeOff, User } from "lucide-react";
+import { ArrowLeft, Phone, Calendar, DollarSign, Eye, EyeOff, User } from "lucide-react";
 import { PaymentHistory } from "@/components/student/PaymentHistory";
 import { AddPaymentDialog } from "@/components/student/AddPaymentDialog";
 import { EditStudentDialog } from "@/components/student/EditStudentDialog";
@@ -14,7 +14,12 @@ import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { GenerateReceiptButton } from "@/components/student/GenerateReceiptButton";
 import { HomeworkList } from "@/components/homework/HomeworkList";
 import { PauseMonthSection } from "@/components/student/PauseMonthSection";
-import { countPausedMonthsInRange } from "@/lib/dueCalculation";
+import { FeeTimeline } from "@/components/student/FeeTimeline";
+import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
+import { CopyFeeReminderButton } from "@/components/student/CopyFeeReminderButton";
+import { useLedger } from "@/hooks/useLedger";
+import { getStudentStatusFromData } from "@/lib/statusCalculation";
+import { formatMonthKey } from "@/lib/ledgerCalculation";
 
 type Student = {
   id: string;
@@ -29,14 +34,18 @@ type Student = {
   paused_months: string[] | null;
 };
 
+type Payment = {
+  id: string;
+  payment_date: string;
+  amount_paid: number;
+};
+
 const StudentProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [student, setStudent] = useState<Student | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalPaid, setTotalPaid] = useState(0);
-  const [totalDue, setTotalDue] = useState(0);
-  const [pendingMonths, setPendingMonths] = useState<string[]>([]);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
 
   const [cardVisibility, setCardVisibility] = useState({
@@ -45,11 +54,29 @@ const StudentProfile = () => {
     totalDue: false,
   });
 
+  // Use the ledger hook for financial data
+  const {
+    entries: ledgerEntries,
+    summary: ledgerSummary,
+    loading: ledgerLoading,
+    sync: syncLedger,
+  } = useLedger({
+    studentId: id || '',
+    joiningDate: student ? new Date(student.joining_date) : undefined,
+    monthlyFee: student?.monthly_fee,
+    pausedMonths: student?.paused_months || [],
+    autoSync: !!student,
+  });
+
+  // Calculate student status
+  const studentStatus = student 
+    ? getStudentStatusFromData(student.paused_months, payments)
+    : 'active';
+
   const toggleCardVisibility = async (key: keyof typeof cardVisibility) => {
     const newVisibility = { ...cardVisibility, [key]: !cardVisibility[key] };
     setCardVisibility(newVisibility);
     
-    // Save to Supabase
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase
@@ -88,7 +115,6 @@ const StudentProfile = () => {
   };
 
   const loadData = async () => {
-    // Load both student and payments data
     const [studentResult, paymentsResult] = await Promise.all([
       supabase.from("students").select("*").eq("id", id).single(),
       supabase.from("payments").select("*").eq("student_id", id)
@@ -96,54 +122,27 @@ const StudentProfile = () => {
     
     if (studentResult.data) {
       setStudent(studentResult.data);
-      
-      // Calculate total paid
-      const total = paymentsResult.data?.reduce((sum, p) => sum + Number(p.amount_paid), 0) || 0;
-      setTotalPaid(total);
-      
-      // Calculate due amount and pending months (EXCLUDING joining month AND current month)
-      const joiningDate = new Date(studentResult.data.joining_date);
-      const now = new Date();
-      
-      // Calculate months from joining to previous month (exclude current month)
-      const monthsEnrolled = (now.getFullYear() - joiningDate.getFullYear()) * 12 + 
-                             (now.getMonth() - joiningDate.getMonth());
-      
-      // Subtract 1 to exclude joining month, ensure non-negative
-      const monthsDiff = Math.max(0, monthsEnrolled);
-      
-      // Count paused months within the eligible range
-      const pausedMonths = studentResult.data.paused_months || [];
-      const pausedCount = countPausedMonthsInRange(pausedMonths, joiningDate, now);
-      
-      // Effective months = total months - paused months
-      const effectiveMonths = Math.max(0, monthsDiff - pausedCount);
-      const totalExpected = effectiveMonths * studentResult.data.monthly_fee;
-      const dueAmount = Math.max(0, totalExpected - total);
-      setTotalDue(dueAmount);
-      
-      // Calculate pending months (start from first month after joining, end before current month)
-      // Skip months that are paid OR paused
-      const paidMonths = new Set(paymentsResult.data?.map(p => p.month) || []);
-      const pausedMonthsSet = new Set(pausedMonths);
-      const pending: string[] = [];
-      
-      for (let i = 1; i <= monthsDiff; i++) {
-        const date = new Date(joiningDate);
-        date.setMonth(joiningDate.getMonth() + i);
-        const monthYear = date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        
-        // Skip if paused OR already paid
-        if (!paidMonths.has(monthYear) && !pausedMonthsSet.has(monthKey)) {
-          pending.push(monthYear);
-        }
-      }
-      
-      setPendingMonths(pending);
     }
+    
+    if (paymentsResult.data) {
+      setPayments(paymentsResult.data);
+    }
+    
     setLoading(false);
   };
+
+  const handleDataUpdate = async () => {
+    await loadData();
+    // Sync ledger after data changes
+    if (student) {
+      await syncLedger();
+    }
+  };
+
+  // Use ledger summary for financial values
+  const totalPaid = ledgerSummary.totalPaid;
+  const totalDue = Math.max(0, ledgerSummary.balance);
+  const pendingMonths = ledgerSummary.pendingMonths.map(formatMonthKey);
 
   if (loading) {
     return (
@@ -182,7 +181,10 @@ const StudentProfile = () => {
             )}
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl font-bold">{student.name}</h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-bold">{student.name}</h1>
+              <StudentStatusBadge status={studentStatus} />
+            </div>
             <p className="text-muted-foreground">Class {student.class}</p>
           </div>
         </div>
@@ -190,6 +192,11 @@ const StudentProfile = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div></div>
           <div className="flex flex-wrap gap-2">
+            <CopyFeeReminderButton
+              studentName={student.name}
+              pendingMonths={ledgerSummary.pendingMonths}
+              totalDue={totalDue}
+            />
             {totalDue > 0 && (
               <GenerateReceiptButton
                 studentName={student.name}
@@ -203,7 +210,7 @@ const StudentProfile = () => {
                 pausedMonths={student.paused_months || []}
               />
             )}
-            <EditStudentDialog student={student} onUpdate={loadData} />
+            <EditStudentDialog student={student} onUpdate={handleDataUpdate} />
             <DeleteStudentDialog studentId={student.id} studentName={student.name} />
           </div>
         </div>
@@ -344,21 +351,26 @@ const StudentProfile = () => {
         <PauseMonthSection
           studentId={student.id}
           pausedMonths={student.paused_months || []}
-          onUpdate={loadData}
+          onUpdate={handleDataUpdate}
         />
 
         <Tabs defaultValue="payments" className="space-y-4">
           <TabsList>
             <TabsTrigger value="payments">Payment History</TabsTrigger>
+            <TabsTrigger value="timeline">Fee Timeline</TabsTrigger>
             <TabsTrigger value="homework">Homework</TabsTrigger>
           </TabsList>
 
           <TabsContent value="payments" className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h2 className="text-xl sm:text-2xl font-bold">Payment History</h2>
-              <AddPaymentDialog studentId={student.id} onPaymentAdded={loadData} />
+              <AddPaymentDialog studentId={student.id} onPaymentAdded={handleDataUpdate} />
             </div>
             <PaymentHistory studentId={student.id} />
+          </TabsContent>
+
+          <TabsContent value="timeline">
+            <FeeTimeline entries={ledgerEntries} loading={ledgerLoading} />
           </TabsContent>
 
           <TabsContent value="homework">

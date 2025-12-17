@@ -4,6 +4,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { deletePaymentEntry } from "@/lib/ledgerCalculation";
 
 type DeletePaymentDialogProps = {
   paymentId: string;
@@ -18,6 +19,9 @@ export const DeletePaymentDialog = ({ paymentId, onDelete }: DeletePaymentDialog
     setLoading(true);
 
     try {
+      // Delete ledger entry first
+      await deletePaymentEntry(paymentId);
+
       const { error } = await supabase
         .from("payments")
         .delete()
