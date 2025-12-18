@@ -101,6 +101,58 @@ export const formatMonthKey = (monthKey: string): string => {
 };
 
 /**
+ * Partial due information
+ */
+export type PartialDueInfo = {
+  isPartial: boolean;
+  partialAmount: number;
+  partialMonth: string; // formatted month name
+  partialMonthKey: string; // YYYY-MM format
+  fullDueMonths: string[]; // formatted month names for full dues
+};
+
+/**
+ * Calculate partial due information
+ * If totalDue < monthlyFee, it's a partial due for the earliest unpaid month
+ * If totalDue >= monthlyFee, determine how many full months + any partial
+ */
+export const getPartialDueInfo = (
+  totalDue: number,
+  monthlyFee: number,
+  pendingMonths: string[] // Already formatted month names from getPendingMonths
+): PartialDueInfo => {
+  if (totalDue <= 0 || pendingMonths.length === 0) {
+    return {
+      isPartial: false,
+      partialAmount: 0,
+      partialMonth: '',
+      partialMonthKey: '',
+      fullDueMonths: [],
+    };
+  }
+
+  const fullMonthsCount = Math.floor(totalDue / monthlyFee);
+  const partialAmount = totalDue % monthlyFee;
+  const isPartial = partialAmount > 0;
+
+  // Full due months are the earliest ones
+  const fullDueMonths = pendingMonths.slice(0, fullMonthsCount);
+  
+  // Partial month is the next one after full months (if there's a partial)
+  const partialMonthKey = isPartial && pendingMonths.length > fullMonthsCount
+    ? pendingMonths[fullMonthsCount]
+    : '';
+
+  return {
+    isPartial,
+    partialAmount,
+    partialMonth: partialMonthKey ? formatMonthKey(partialMonthKey) : '',
+    partialMonthKey,
+    fullDueMonths: fullDueMonths.map(formatMonthKey),
+  };
+};
+
+/**
  * Calculate total paid from payments table
  */
 export const calculateTotalPaidFromPayments = (

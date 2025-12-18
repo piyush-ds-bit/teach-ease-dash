@@ -2,12 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
-import { formatMonthKey } from "@/lib/ledgerCalculation";
+import { formatMonthKey, getPartialDueInfo } from "@/lib/feeCalculation";
 
 interface CopyFeeReminderButtonProps {
   studentName: string;
   pendingMonths: string[];
   totalDue: number;
+  monthlyFee?: number;
   variant?: "default" | "outline" | "ghost" | "secondary";
   size?: "default" | "sm" | "lg" | "icon";
 }
@@ -16,6 +17,7 @@ export const CopyFeeReminderButton = ({
   studentName,
   pendingMonths,
   totalDue,
+  monthlyFee = 0,
   variant = "outline",
   size = "default",
 }: CopyFeeReminderButtonProps) => {
@@ -45,9 +47,32 @@ export const CopyFeeReminderButton = ({
   };
 
   const generateMessage = (): string => {
-    const monthsText = formatPendingMonthsText(pendingMonths);
     const amountText = `₹${totalDue.toLocaleString('en-IN')}`;
     
+    // Handle partial due in message
+    if (monthlyFee > 0 && totalDue > 0) {
+      const partialInfo = getPartialDueInfo(totalDue, monthlyFee, pendingMonths);
+      
+      if (partialInfo.isPartial && partialInfo.fullDueMonths.length === 0) {
+        // Only partial due
+        return `Ram Ram ji,
+${amountText} partial fee is pending for ${partialInfo.partialMonth}.
+Please let me know once paid.
+– Piyush Bhaiya`;
+      } else if (partialInfo.isPartial && partialInfo.fullDueMonths.length > 0) {
+        // Full months + partial
+        const fullMonthsText = partialInfo.fullDueMonths.length === 1 
+          ? partialInfo.fullDueMonths[0]
+          : partialInfo.fullDueMonths.slice(0, -1).join(', ') + ' and ' + partialInfo.fullDueMonths.slice(-1);
+        return `Ram Ram ji,
+${amountText} fee is pending for ${fullMonthsText} + partial for ${partialInfo.partialMonth}.
+Please let me know once paid.
+– Piyush Bhaiya`;
+      }
+    }
+    
+    // Default: full months only
+    const monthsText = formatPendingMonthsText(pendingMonths);
     return `Ram Ram ji,
 ${amountText} fee is pending for ${monthsText}.
 Please let me know once paid.
@@ -55,7 +80,7 @@ Please let me know once paid.
   };
 
   const handleCopy = async () => {
-    if (totalDue <= 0 || pendingMonths.length === 0) {
+    if (totalDue <= 0) {
       toast.info("No pending fees to remind about");
       return;
     }
@@ -74,7 +99,7 @@ Please let me know once paid.
     }
   };
 
-  const isDisabled = totalDue <= 0 || pendingMonths.length === 0;
+  const isDisabled = totalDue <= 0;
 
   return (
     <Button

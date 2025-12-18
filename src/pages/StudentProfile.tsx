@@ -229,6 +229,7 @@ const StudentProfile = () => {
               studentName={student.name}
               pendingMonths={pendingMonths}
               totalDue={totalDue}
+              monthlyFee={student.monthly_fee}
             />
             {totalDue > 0 && (
               <GenerateReceiptButton
@@ -237,7 +238,7 @@ const StudentProfile = () => {
                 monthlyFee={student.monthly_fee}
                 totalDue={totalDue}
                 joiningDate={student.joining_date}
-                pendingMonths={pendingMonthsFormatted}
+                pendingMonths={pendingMonths}
                 subject={student.subject}
                 profilePhotoUrl={student.profile_photo_url}
                 pausedMonths={student.paused_months || []}
@@ -403,7 +404,7 @@ const StudentProfile = () => {
           </TabsContent>
 
           <TabsContent value="timeline">
-            <FeeTimeline entries={ledgerEntries} loading={ledgerLoading} />
+            <FeeTimeline entries={ledgerEntries} loading={ledgerLoading} monthlyFee={student.monthly_fee} />
           </TabsContent>
 
           <TabsContent value="homework">
