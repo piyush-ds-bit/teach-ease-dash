@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
 import { CopyFeeReminderButton } from "@/components/student/CopyFeeReminderButton";
 import { useLedger } from "@/hooks/useLedger";
 import { getStudentStatusFromData } from "@/lib/statusCalculation";
-import { formatMonthKey } from "@/lib/ledgerCalculation";
+import { calculateTotalPayable, calculateTotalPaidFromPayments, getPendingMonths, formatMonthKey } from "@/lib/feeCalculation";
 
 type Student = {
   id: string;
@@ -40,6 +40,13 @@ type Payment = {
   amount_paid: number;
 };
 
+interface FeeData {
+  totalPayable: number;
+  totalPaid: number;
+  totalDue: number;
+  pendingMonths: string[];
+}
+
 const StudentProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -47,6 +54,13 @@ const StudentProfile = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
+
+  const [feeData, setFeeData] = useState<FeeData>({
+    totalPayable: 0,
+    totalPaid: 0,
+    totalDue: 0,
+    pendingMonths: [],
+  });
 
   const [cardVisibility, setCardVisibility] = useState({
     monthlyFee: false,
@@ -122,6 +136,26 @@ const StudentProfile = () => {
     
     if (studentResult.data) {
       setStudent(studentResult.data);
+      
+      // Calculate fee data directly from source tables
+      const studentData = studentResult.data;
+      const paymentsData = paymentsResult.data || [];
+      
+      const joiningDate = new Date(studentData.joining_date);
+      const pausedMonths = studentData.paused_months || [];
+      const monthlyFee = Number(studentData.monthly_fee);
+      
+      const totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
+      const totalPaid = calculateTotalPaidFromPayments(paymentsData);
+      const totalDue = Math.max(0, totalPayable - totalPaid);
+      const pendingMonths = getPendingMonths(joiningDate, pausedMonths);
+      
+      setFeeData({
+        totalPayable,
+        totalPaid,
+        totalDue,
+        pendingMonths,
+      });
     }
     
     if (paymentsResult.data) {
@@ -133,16 +167,15 @@ const StudentProfile = () => {
 
   const handleDataUpdate = async () => {
     await loadData();
-    // Sync ledger after data changes
+    // Sync ledger for timeline display
     if (student) {
       await syncLedger();
     }
   };
 
-  // Use ledger summary for financial values
-  const totalPaid = ledgerSummary.totalPaid;
-  const totalDue = Math.max(0, ledgerSummary.balance);
-  const pendingMonths = ledgerSummary.pendingMonths.map(formatMonthKey);
+  // Use direct calculation from source tables for financial values
+  const { totalPaid, totalDue, pendingMonths } = feeData;
+  const pendingMonthsFormatted = pendingMonths.map(formatMonthKey);
 
   if (loading) {
     return (
@@ -194,7 +227,7 @@ const StudentProfile = () => {
           <div className="flex flex-wrap gap-2">
             <CopyFeeReminderButton
               studentName={student.name}
-              pendingMonths={ledgerSummary.pendingMonths}
+              pendingMonths={pendingMonths}
               totalDue={totalDue}
             />
             {totalDue > 0 && (
@@ -204,7 +237,7 @@ const StudentProfile = () => {
                 monthlyFee={student.monthly_fee}
                 totalDue={totalDue}
                 joiningDate={student.joining_date}
-                pendingMonths={pendingMonths}
+                pendingMonths={pendingMonthsFormatted}
                 subject={student.subject}
                 profilePhotoUrl={student.profile_photo_url}
                 pausedMonths={student.paused_months || []}

@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Search, User } from "lucide-react";
 import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
-import { countPausedMonthsInRange } from "@/lib/dueCalculation";
+import { calculateTotalPayable } from "@/lib/feeCalculation";
 import { getStudentStatusFromData } from "@/lib/statusCalculation";
 
 type Student = {
@@ -98,25 +98,12 @@ export const StudentsTable = () => {
 
   const calculateDue = (student: Student) => {
     const joiningDate = new Date(student.joining_date);
-    const now = new Date();
-  
-    let monthsDiff =
-      (now.getFullYear() - joiningDate.getFullYear()) * 12 +
-      (now.getMonth() - joiningDate.getMonth());
-  
-    if (now.getDate() < joiningDate.getDate()) {
-      monthsDiff -= 1;
-    }
-  
-    monthsDiff = Math.max(0, monthsDiff);
-  
-    const pausedCount = countPausedMonthsInRange(student.paused_months, joiningDate, now);
-    const effectiveMonths = Math.max(0, monthsDiff - pausedCount);
-    const totalPayable = effectiveMonths * student.monthly_fee;
+    const pausedMonths = student.paused_months || [];
+    const monthlyFee = Number(student.monthly_fee);
     const totalPaid = student.total_paid || 0;
-    const totalDue = Math.max(0, totalPayable - totalPaid);
-  
-    return totalDue;
+    
+    const totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
+    return Math.max(0, totalPayable - totalPaid);
   };
 
   const getPaymentStatus = (due: number) => {
