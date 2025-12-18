@@ -9,12 +9,14 @@ import {
   PlayCircle, 
   AlertCircle,
   TrendingDown,
-  TrendingUp
+  TrendingUp,
+  AlertTriangle
 } from "lucide-react";
 
 interface FeeTimelineProps {
   entries: LedgerEntry[];
   loading?: boolean;
+  monthlyFee?: number;
 }
 
 const getEntryIcon = (type: LedgerEntry['entry_type']) => {
@@ -92,7 +94,7 @@ const getEntryLabel = (type: LedgerEntry['entry_type']) => {
   }
 };
 
-export const FeeTimeline = ({ entries, loading }: FeeTimelineProps) => {
+export const FeeTimeline = ({ entries, loading, monthlyFee = 0 }: FeeTimelineProps) => {
   if (loading) {
     return (
       <Card>
@@ -137,19 +139,48 @@ export const FeeTimeline = ({ entries, loading }: FeeTimelineProps) => {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  // Calculate running balance
+  // Calculate running balance and per-month balances
   let runningBalance = 0;
-  const entriesWithBalance = sortedEntries.map(entry => {
+  const monthBalances: Record<string, number> = {};
+  
+  // First pass: calculate balances per month (chronological order)
+  const chronoEntries = [...sortedEntries].reverse();
+  chronoEntries.forEach(entry => {
+    const monthKey = entry.month_key;
+    if (!monthBalances[monthKey]) {
+      monthBalances[monthKey] = 0;
+    }
+    
+    if (entry.entry_type === 'FEE_DUE') {
+      monthBalances[monthKey] += Number(entry.amount);
+      runningBalance += Number(entry.amount);
+    } else if (entry.entry_type === 'PAYMENT') {
+      monthBalances[monthKey] -= Number(entry.amount);
+      runningBalance -= Number(entry.amount);
+    }
+  });
+
+  // Second pass: add running balances to entries
+  runningBalance = 0;
+  const entriesWithBalance = chronoEntries.map(entry => {
     if (entry.entry_type === 'FEE_DUE') {
       runningBalance += Number(entry.amount);
     } else if (entry.entry_type === 'PAYMENT') {
       runningBalance -= Number(entry.amount);
     }
     return { ...entry, runningBalance };
-  }).reverse();
+  });
 
   // Re-reverse for display (most recent first)
   const displayEntries = [...entriesWithBalance].reverse();
+
+  // Determine which months have partial dues
+  const getMonthStatus = (monthKey: string, balance: number) => {
+    const monthBal = monthBalances[monthKey] || 0;
+    if (monthBal <= 0) return 'paid';
+    if (monthlyFee > 0 && monthBal < monthlyFee) return 'partial';
+    return 'due';
+  };
 
   return (
     <Card>
@@ -165,6 +196,9 @@ export const FeeTimeline = ({ entries, loading }: FeeTimelineProps) => {
             {displayEntries.map((entry, index) => {
               const styles = getEntryStyles(entry.entry_type);
               const isLast = index === displayEntries.length - 1;
+              const monthStatus = getMonthStatus(entry.month_key, entry.runningBalance);
+              const isPartialMonth = monthStatus === 'partial' && entry.entry_type === 'FEE_DUE';
+              const partialAmount = monthlyFee > 0 ? monthBalances[entry.month_key] || 0 : 0;
               
               return (
                 <div key={entry.id} className="relative pl-8 pb-6">
@@ -177,17 +211,32 @@ export const FeeTimeline = ({ entries, loading }: FeeTimelineProps) => {
                   
                   {/* Icon */}
                   <div 
-                    className={`absolute left-0 top-0 w-8 h-8 rounded-full flex items-center justify-center ${styles.icon}`}
+                    className={`absolute left-0 top-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                      isPartialMonth 
+                        ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' 
+                        : styles.icon
+                    }`}
                   >
-                    {getEntryIcon(entry.entry_type)}
+                    {isPartialMonth ? <AlertTriangle className="h-4 w-4" /> : getEntryIcon(entry.entry_type)}
                   </div>
                   
                   {/* Content */}
                   <div className="bg-card border rounded-lg p-3 ml-2">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <Badge variant="secondary" className={styles.badge}>
-                        {getEntryLabel(entry.entry_type)}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className={
+                          isPartialMonth 
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' 
+                            : styles.badge
+                        }>
+                          {isPartialMonth ? 'Partial Due' : getEntryLabel(entry.entry_type)}
+                        </Badge>
+                        {isPartialMonth && (
+                          <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                            ₹{partialAmount.toLocaleString('en-IN')} remaining
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-muted-foreground">
                         {formatMonthKey(entry.month_key)}
                       </span>
@@ -202,10 +251,14 @@ export const FeeTimeline = ({ entries, loading }: FeeTimelineProps) => {
                         <span className={`font-semibold flex items-center gap-1 ${
                           entry.entry_type === 'PAYMENT' 
                             ? 'text-emerald-600 dark:text-emerald-400' 
-                            : 'text-rose-600 dark:text-rose-400'
+                            : isPartialMonth
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-rose-600 dark:text-rose-400'
                         }`}>
                           {entry.entry_type === 'PAYMENT' ? (
                             <TrendingDown className="h-3 w-3" />
+                          ) : isPartialMonth ? (
+                            <AlertTriangle className="h-3 w-3" />
                           ) : (
                             <TrendingUp className="h-3 w-3" />
                           )}

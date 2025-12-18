@@ -1,12 +1,13 @@
 import { jsPDF } from "jspdf";
 
 import { formatPausedMonth } from "@/lib/dueCalculation";
+import { getPartialDueInfo, formatMonthKey } from "@/lib/feeCalculation";
 
 export type ReceiptData = {
   studentName: string;
   studentId: string;
   monthlyFee: number;
-  pendingMonths: string[];
+  pendingMonths: string[]; // month keys in YYYY-MM format
   totalDue: number;
   joiningDate: string;
   subject?: string | null;
@@ -192,19 +193,45 @@ export const generateReceipt = async (data: ReceiptData) => {
   yPos += 10;
   pdf.setFontSize(11);
   pdf.setFont("helvetica", "bold");
-  pdf.text("Pending Months:", 20, yPos);
+  pdf.text("Pending Fee:", 20, yPos);
   
   yPos += lineHeight;
   pdf.setFont("helvetica", "normal");
   
-  // Display pending months
-  if (data.pendingMonths.length > 0) {
-    const monthsText = data.pendingMonths.join(", ");
-    const splitMonths = pdf.splitTextToSize(monthsText, 170);
-    pdf.text(splitMonths, 20, yPos);
-    yPos += splitMonths.length * lineHeight;
+  // Calculate partial due info
+  const partialDueInfo = getPartialDueInfo(data.totalDue, data.monthlyFee, data.pendingMonths);
+  
+  // Display pending months with partial due handling
+  if (data.totalDue > 0) {
+    if (partialDueInfo.fullDueMonths.length > 0 && partialDueInfo.isPartial) {
+      // Has both full months and partial
+      const fullMonthsText = partialDueInfo.fullDueMonths.join(", ");
+      const partialText = `${partialDueInfo.partialMonth} (Partial: Rs. ${partialDueInfo.partialAmount.toLocaleString("en-IN")})`;
+      const combinedText = `${fullMonthsText}, ${partialText}`;
+      const splitMonths = pdf.splitTextToSize(combinedText, 170);
+      pdf.text(splitMonths, 20, yPos);
+      yPos += splitMonths.length * lineHeight;
+    } else if (partialDueInfo.fullDueMonths.length > 0) {
+      // Only full months due
+      const monthsText = partialDueInfo.fullDueMonths.join(", ");
+      const splitMonths = pdf.splitTextToSize(monthsText, 170);
+      pdf.text(splitMonths, 20, yPos);
+      yPos += splitMonths.length * lineHeight;
+    } else if (partialDueInfo.isPartial) {
+      // Only partial due (totalDue < monthlyFee)
+      const partialText = `Rs. ${partialDueInfo.partialAmount.toLocaleString("en-IN")} (Partial due for ${partialDueInfo.partialMonth})`;
+      const splitMonths = pdf.splitTextToSize(partialText, 170);
+      pdf.text(splitMonths, 20, yPos);
+      yPos += splitMonths.length * lineHeight;
+    } else {
+      // Edge case: has due but no months (shouldn't happen)
+      const pendingText = data.pendingMonths.map(m => formatMonthKey(m)).join(", ");
+      const splitMonths = pdf.splitTextToSize(pendingText || "Outstanding balance", 170);
+      pdf.text(splitMonths, 20, yPos);
+      yPos += splitMonths.length * lineHeight;
+    }
   } else {
-    pdf.text("No pending months", 20, yPos);
+    pdf.text("No pending fees", 20, yPos);
     yPos += lineHeight;
   }
 
