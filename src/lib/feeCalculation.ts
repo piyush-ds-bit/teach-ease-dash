@@ -3,10 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * Calculate total payable amount from joining date to now
  * Business rules:
- * - Joining month does NOT generate fee immediately
- * - Monthly fee is added only after one full month completes
- * - Current month is never considered due
+ * - Joining month becomes due AFTER it fully completes
+ * - Current month is NEVER considered due (ongoing)
  * - Paused months do not generate fees
+ * 
+ * Example: Student joins Oct 1, today is Dec 15
+ * - October → fully completed → DUE
+ * - November → fully completed → DUE  
+ * - December → ongoing → NOT DUE
+ * - Total = 2 months due
  */
 export const calculateTotalPayable = (
   joiningDate: Date,
@@ -15,38 +20,21 @@ export const calculateTotalPayable = (
 ): number => {
   const now = new Date();
   
-  // Calculate months between joining and now (excluding joining month and current month)
   const joiningYear = joiningDate.getFullYear();
   const joiningMonth = joiningDate.getMonth();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
   
-  // Total months from joining to now (excluding joining month)
-  // e.g., joined Jan 2024, now is Apr 2024 -> Feb, Mar = 2 months due
-  let totalMonths = (currentYear - joiningYear) * 12 + (currentMonth - joiningMonth);
-  
-  // Subtract 1 because joining month doesn't count, but we already exclude current month
-  // So: joined Jan, now Apr -> (4-1) = 3 months, minus joining month = months Feb, Mar (2 months)
-  // Actually the formula gives us 3, and current month (Apr) shouldn't be counted
-  // So if joined Jan 2024 and now is Apr 2024: 3 months (Feb, Mar, Apr) but Apr is current so 2 months
-  // Formula: (currentYear - joiningYear) * 12 + (currentMonth - joiningMonth) = 3
-  // This counts Jan->Feb, Feb->Mar, Mar->Apr = 3 months but Apr is current, so we need -1? No wait...
-  // Let me think again: Jan=0, Apr=3. Diff = 3. That's Feb(1), Mar(2), Apr(3) = 3 months from Jan
-  // But joining month (Jan) doesn't generate fee, current month (Apr) doesn't generate fee
-  // So billable = Feb, Mar = 2 months. Formula should be: diff - 1 for current month
-  // But diff already doesn't include joining month in the count (it's the difference)
-  // So totalMonths = 3 - 1 = 2 (for current month exclusion)? No...
-  
-  // Simpler approach: count months AFTER joining and BEFORE current month
-  // Start from month after joining, end before current month
-  const startMonth = new Date(joiningYear, joiningMonth + 1, 1); // Month after joining
-  const endMonth = new Date(currentYear, currentMonth, 1); // Current month (exclusive)
+  // Start from joining month (it becomes due after it completes)
+  const startMonth = new Date(joiningYear, joiningMonth, 1);
+  // End before current month (current month is never due)
+  const endMonth = new Date(currentYear, currentMonth, 1);
   
   if (startMonth >= endMonth) {
-    return 0; // No full months completed yet
+    return 0; // Joining month hasn't completed yet
   }
   
-  // Count months
+  // Count completed months from joining month up to (but not including) current month
   let monthCount = 0;
   const cursor = new Date(startMonth);
   
@@ -77,7 +65,9 @@ export const getPendingMonths = (
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
   
-  const startMonth = new Date(joiningYear, joiningMonth + 1, 1);
+  // Start from joining month (becomes due after completion)
+  const startMonth = new Date(joiningYear, joiningMonth, 1);
+  // End before current month
   const endMonth = new Date(currentYear, currentMonth, 1);
   
   if (startMonth >= endMonth) {
