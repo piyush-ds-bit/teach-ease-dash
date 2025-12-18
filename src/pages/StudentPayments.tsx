@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, Calendar } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import { countPausedMonthsInRange } from "@/lib/dueCalculation";
+import { calculateTotalPayable, calculateTotalPaidFromPayments } from "@/lib/feeCalculation";
 
 interface Student {
   monthly_fee: number;
@@ -69,27 +69,15 @@ const StudentPayments = () => {
     if (!student) return 0;
 
     const joiningDate = new Date(student.joining_date);
-    const now = new Date();
+    const pausedMonths = student.paused_months || [];
+    const monthlyFee = Number(student.monthly_fee);
 
-    let monthsDiff =
-      (now.getFullYear() - joiningDate.getFullYear()) * 12 +
-      (now.getMonth() - joiningDate.getMonth());
-
-    if (monthsDiff > 0) monthsDiff -= 1;
-    monthsDiff = Math.max(0, monthsDiff);
-
-    // Count paused months within the eligible range
-    const pausedCount = countPausedMonthsInRange(student.paused_months, joiningDate, now);
-    
-    // Effective months = total months - paused months
-    const effectiveMonths = Math.max(0, monthsDiff - pausedCount);
-
-    const totalPayable = effectiveMonths * student.monthly_fee;
-    const totalPaid = payments.reduce((sum, p) => sum + p.amount_paid, 0);
+    const totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
+    const totalPaid = calculateTotalPaidFromPayments(payments);
     return Math.max(0, totalPayable - totalPaid);
   };
 
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount_paid, 0);
+  const totalPaid = calculateTotalPaidFromPayments(payments);
   const totalDue = calculateDue();
 
   if (loading) {
