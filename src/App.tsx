@@ -18,6 +18,8 @@ import StudentHomework from "./pages/StudentHomework";
 import { ProtectedStudentRoute } from "./components/student/ProtectedStudentRoute";
 import GenerateCredentials from "./pages/GenerateCredentials";
 import { CalculatorButton } from "./components/calculator/CalculatorButton";
+import Lending from "./pages/Lending";
+import BorrowerProfile from "./pages/BorrowerProfile";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +46,10 @@ const App = () => (
           
           {/* Admin Tools */}
           <Route path="/admin/generate-credentials" element={<GenerateCredentials />} />
+          
+          {/* Lending Routes */}
+          <Route path="/lending" element={<Lending />} />
+          <Route path="/borrower/:id" element={<BorrowerProfile />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

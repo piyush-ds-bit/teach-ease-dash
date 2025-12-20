@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      borrowers: {
+        Row: {
+          contact_number: string | null
+          created_at: string
+          duration_months: number | null
+          id: string
+          interest_rate: number | null
+          interest_type: Database["public"]["Enums"]["interest_type"]
+          loan_start_date: string
+          name: string
+          notes: string | null
+          principal_amount: number
+          profile_photo_url: string | null
+        }
+        Insert: {
+          contact_number?: string | null
+          created_at?: string
+          duration_months?: number | null
+          id?: string
+          interest_rate?: number | null
+          interest_type?: Database["public"]["Enums"]["interest_type"]
+          loan_start_date: string
+          name: string
+          notes?: string | null
+          principal_amount: number
+          profile_photo_url?: string | null
+        }
+        Update: {
+          contact_number?: string | null
+          created_at?: string
+          duration_months?: number | null
+          id?: string
+          interest_rate?: number | null
+          interest_type?: Database["public"]["Enums"]["interest_type"]
+          loan_start_date?: string
+          name?: string
+          notes?: string | null
+          principal_amount?: number
+          profile_photo_url?: string | null
+        }
+        Relationships: []
+      }
       fee_ledger: {
         Row: {
           amount: number
@@ -92,6 +134,47 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lending_ledger: {
+        Row: {
+          amount: number
+          borrower_id: string
+          created_at: string
+          description: string | null
+          entry_date: string
+          entry_type: string
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          amount: number
+          borrower_id: string
+          created_at?: string
+          description?: string | null
+          entry_date: string
+          entry_type: string
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          amount?: number
+          borrower_id?: string
+          created_at?: string
+          description?: string | null
+          entry_date?: string
+          entry_type?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lending_ledger_borrower_id_fkey"
+            columns: ["borrower_id"]
+            isOneToOne: false
+            referencedRelation: "borrowers"
             referencedColumns: ["id"]
           },
         ]
@@ -278,6 +361,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      interest_type: "simple_monthly" | "simple_yearly" | "zero_interest"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -406,6 +490,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      interest_type: ["simple_monthly", "simple_yearly", "zero_interest"],
     },
   },
 } as const

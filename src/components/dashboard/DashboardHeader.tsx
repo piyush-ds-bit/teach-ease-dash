@@ -1,4 +1,4 @@
-import { GraduationCap, LogOut, Calendar, Users } from "lucide-react";
+import { GraduationCap, LogOut, Calendar, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -85,6 +85,25 @@ export const DashboardHeader = () => {
                   </TooltipTrigger>
                   <TooltipContent className="md:hidden">
                     <p>Routine</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link to="/lending">
+                      <Button 
+                        variant={location.pathname.startsWith("/lending") || location.pathname.startsWith("/borrower") ? "default" : "ghost"} 
+                        size="sm"
+                        aria-label="Lending"
+                        title="Lending"
+                        className="px-2 md:px-3"
+                      >
+                        <Wallet className="h-4 w-4 md:mr-2" />
+                        <span className="hidden md:inline">Lending</span>
+                      </Button>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent className="md:hidden">
+                    <p>Lending</p>
                   </TooltipContent>
                 </Tooltip>
               </nav>
