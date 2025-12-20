@@ -11,8 +11,9 @@ import { DeleteBorrowerDialog } from "@/components/lending/DeleteBorrowerDialog"
 import { EditPaymentDialog } from "@/components/lending/EditPaymentDialog";
 import { DeletePaymentDialog } from "@/components/lending/DeletePaymentDialog";
 import { useLendingLedger } from "@/hooks/useLendingLedger";
-import { Borrower, calculateBorrowerSummary, isLoanCleared, LendingLedgerEntry } from "@/lib/lendingCalculation";
-import { Loader2 } from "lucide-react";
+import { Borrower, calculateBorrowerSummary, isLoanCleared, LendingLedgerEntry, formatInterestType } from "@/lib/lendingCalculation";
+import { Loader2, Calendar } from "lucide-react";
+import { format, parseISO } from "date-fns";
 
 export default function BorrowerProfile() {
   const { id } = useParams<{ id: string }>();
@@ -73,6 +74,24 @@ export default function BorrowerProfile() {
           onEdit={() => setEditBorrowerOpen(true)}
           onDelete={() => setDeleteBorrowerOpen(true)}
         />
+
+        {/* Loan Details Section */}
+        <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Calendar className="h-4 w-4" />
+            <span>Loan Start Date:</span>
+            <span className="font-medium text-foreground">{format(parseISO(borrower.loan_start_date), 'dd MMM yyyy')}</span>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Calendar className="h-4 w-4" />
+            <span>Today's Date:</span>
+            <span className="font-medium text-foreground">{format(new Date(), 'dd MMM yyyy')}</span>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span>Interest Type:</span>
+            <span className="font-medium text-foreground">{formatInterestType(borrower.interest_type, borrower.interest_rate)}</span>
+          </div>
+        </div>
 
         <LoanSummaryCard
           principal={summary.principal}

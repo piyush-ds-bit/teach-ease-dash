@@ -88,8 +88,14 @@ export function getYearsElapsed(startDate: string): number {
 
 /**
  * Calculate simple interest based on type
- * For monthly: Interest = Principal × (Rate/100) × (Months/12)
- * For yearly: Interest = Principal × (Rate/100) × Years
+ * 
+ * Monthly Simple Interest:
+ *   Interest = Principal × MonthlyRate × NumberOfCompletedMonths
+ *   Example: ₹1000 at 5% monthly for 2 months = 1000 × 0.05 × 2 = ₹100
+ * 
+ * Yearly Simple Interest (Prorated Monthly):
+ *   Interest = Principal × (YearlyRate / 12) × NumberOfCompletedMonths
+ *   Example: ₹1000 at 5% yearly for 12 months = 1000 × (0.05 / 12) × 12 = ₹50
  */
 export function calculateInterest(
   principal: number,
@@ -102,15 +108,16 @@ export function calculateInterest(
   }
   
   const rateDecimal = rate / 100;
+  const months = getMonthsElapsed(startDate);
   
   if (interestType === 'simple_monthly') {
-    const months = getMonthsElapsed(startDate);
-    return principal * rateDecimal * (months / 12);
+    // Interest = Principal × MonthlyRate × Months
+    return principal * rateDecimal * months;
   }
   
   if (interestType === 'simple_yearly') {
-    const years = getYearsElapsed(startDate);
-    return principal * rateDecimal * years;
+    // Yearly rate prorated monthly: Interest = Principal × (YearlyRate / 12) × Months
+    return principal * (rateDecimal / 12) * months;
   }
   
   return 0;
@@ -209,11 +216,11 @@ export function formatInterestType(type: InterestType, rate: number): string {
   }
   
   if (type === 'simple_monthly') {
-    return `${rate}% p.a. (Monthly)`;
+    return `${rate}% / month`;
   }
   
   if (type === 'simple_yearly') {
-    return `${rate}% p.a. (Yearly)`;
+    return `${rate}% / year`;
   }
   
   return 'Unknown';
