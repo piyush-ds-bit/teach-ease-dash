@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus } from "lucide-react";
+import { Plus, Upload, X } from "lucide-react";
 import { InterestType } from "@/lib/lendingCalculation";
 
 interface AddBorrowerDialogProps {
@@ -18,6 +19,9 @@ export function AddBorrowerDialog({ onBorrowerAdded }: AddBorrowerDialogProps) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -29,6 +33,26 @@ export function AddBorrowerDialog({ onBorrowerAdded }: AddBorrowerDialogProps) {
     duration_months: "",
     notes: "",
   });
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +87,27 @@ export function AddBorrowerDialog({ onBorrowerAdded }: AddBorrowerDialogProps) {
 
       if (borrowerError) throw borrowerError;
 
+      // Upload photo if selected
+      if (selectedImage && borrower) {
+        const fileExt = selectedImage.name.split('.').pop();
+        const filePath = `${borrower.id}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('borrower-photos')
+          .upload(filePath, selectedImage, { upsert: true });
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('borrower-photos')
+            .getPublicUrl(filePath);
+
+          await supabase
+            .from('borrowers')
+            .update({ profile_photo_url: urlData.publicUrl })
+            .eq('id', borrower.id);
+        }
+      }
+
       // Create principal ledger entry
       const { error: ledgerError } = await supabase
         .from('lending_ledger')
@@ -92,6 +137,7 @@ export function AddBorrowerDialog({ onBorrowerAdded }: AddBorrowerDialogProps) {
         duration_months: "",
         notes: "",
       });
+      clearImage();
       onBorrowerAdded();
     } catch (error: unknown) {
       toast({
@@ -117,6 +163,47 @@ export function AddBorrowerDialog({ onBorrowerAdded }: AddBorrowerDialogProps) {
           <DialogTitle>Add New Borrower</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Profile Photo Upload */}
+          <div className="space-y-2">
+            <Label>Profile Photo</Label>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={imagePreview || undefined} />
+                <AvatarFallback className="text-lg">
+                  {formData.name ? formData.name.charAt(0).toUpperCase() : "?"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload
+                </Button>
+                {imagePreview && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearImage}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="name">Full Name *</Label>
             <Input
