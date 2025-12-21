@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { generateStudentId, generateRandomPassword, hashPassword } from "@/lib/studentAuth";
+import { generateStudentId, generateRandomPassword, generateCredentials as generateCredentialsApi } from "@/lib/studentAuth";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Copy, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -21,7 +21,7 @@ const GenerateCredentials = () => {
   const [credentials, setCredentials] = useState<GeneratedCredential[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
 
-  const generateCredentials = async () => {
+  const generateAllCredentials = async () => {
     setLoading(true);
     try {
       // Fetch all students
@@ -37,7 +37,7 @@ const GenerateCredentials = () => {
       // Generate credentials for each student
       for (const student of students || []) {
         let loginId = student.login_id;
-        let password = generateRandomPassword();
+        const password = generateRandomPassword();
 
         // Generate unique login_id if not exists
         if (!loginId) {
@@ -54,24 +54,21 @@ const GenerateCredentials = () => {
               isUnique = true;
             }
           }
-        } else {
-          // If login_id exists but no password, just generate new password
-          password = generateRandomPassword();
+
+          // Update login_id in database
+          await supabase
+            .from("students")
+            .update({ login_id: loginId })
+            .eq("id", student.id);
         }
 
-        // Hash the password
-        const passwordHash = await hashPassword(password);
-
-        // Update student record
-        const { error: updateError } = await supabase
-          .from("students")
-          .update({
-            login_id: loginId,
-            password_hash: passwordHash,
-          })
-          .eq("id", student.id);
-
-        if (updateError) throw updateError;
+        // Generate credentials via edge function (bcrypt hashing)
+        const result = await generateCredentialsApi(student.id, password);
+        
+        if (!result.success) {
+          console.error(`Failed to set password for ${student.name}:`, result.error);
+          // Continue with other students
+        }
 
         newCredentials.push({
           studentId: student.id,
@@ -141,11 +138,11 @@ const GenerateCredentials = () => {
               <CardTitle>Generate Credentials</CardTitle>
               <CardDescription>
                 Click the button below to generate Student IDs and passwords for all students.
-                The passwords will be hashed and stored securely in the database.
+                The passwords will be securely hashed with bcrypt and stored in the database.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={generateCredentials} disabled={loading}>
+              <Button onClick={generateAllCredentials} disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Generate All Credentials
               </Button>

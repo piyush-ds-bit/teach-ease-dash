@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { verifyPassword, setStudentSession, getStudentSession } from "@/lib/studentAuth";
+import { loginStudent, getStudentSession } from "@/lib/studentAuth";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 
@@ -15,66 +15,63 @@ const StudentLogin = () => {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    // Check if already logged in
-    const session = getStudentSession();
-    if (session) {
-      navigate("/student-dashboard");
-    }
+    // Check if already logged in as a student
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const studentInfo = getStudentSession();
+      
+      if (session && studentInfo && session.user?.user_metadata?.is_student) {
+        navigate("/student-dashboard");
+      }
+      setCheckingSession(false);
+    };
+    
+    checkSession();
   }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Basic validation
+    if (!loginId.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter your Student ID",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!password) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter your password",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Query student by login_id
-      const { data: student, error } = await supabase
-        .from("students")
-        .select("id, login_id, password_hash, name")
-        .eq("login_id", loginId)
-        .maybeSingle();
+      const result = await loginStudent(loginId.trim(), password);
 
-      if (error || !student) {
+      if (!result.success) {
         toast({
-          title: "Invalid credentials",
-          description: "Student ID or password is incorrect.",
+          title: "Login Failed",
+          description: result.error || "Invalid credentials",
           variant: "destructive",
         });
         setLoading(false);
         return;
       }
-
-      if (!student.password_hash) {
-        toast({
-          title: "Account not configured",
-          description: "Please contact your administrator to set up your password.",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Verify password
-      const isValid = await verifyPassword(password, student.password_hash);
-
-      if (!isValid) {
-        toast({
-          title: "Invalid credentials",
-          description: "Student ID or password is incorrect.",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Set session
-      setStudentSession(student.id, student.login_id, student.name);
 
       toast({
         title: "Login successful",
-        description: `Welcome back, ${student.name}!`,
+        description: `Welcome back, ${result.student?.name || "Student"}!`,
       });
 
       navigate("/student-dashboard");
@@ -89,6 +86,14 @@ const StudentLogin = () => {
       setLoading(false);
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted to-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted to-background p-4">
@@ -117,6 +122,7 @@ const StudentLogin = () => {
                 onChange={(e) => setLoginId(e.target.value.toUpperCase())}
                 required
                 disabled={loading}
+                maxLength={20}
               />
             </div>
             <div className="space-y-2">
@@ -129,6 +135,7 @@ const StudentLogin = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
+                maxLength={128}
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
