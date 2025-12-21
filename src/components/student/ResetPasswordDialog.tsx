@@ -9,8 +9,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { KeyRound, Loader2, Copy, CheckCircle2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { generateRandomPassword, hashPassword } from "@/lib/studentAuth";
+import { generateRandomPassword, resetStudentPassword } from "@/lib/studentAuth";
 import { toast } from "@/hooks/use-toast";
 
 interface ResetPasswordDialogProps {
@@ -29,25 +28,24 @@ export const ResetPasswordDialog = ({ studentId, studentName }: ResetPasswordDia
 
     try {
       const password = generateRandomPassword();
-      const passwordHash = await hashPassword(password);
+      
+      // Use edge function for secure bcrypt hashing
+      const result = await resetStudentPassword(studentId, password);
 
-      const { error } = await supabase
-        .from("students")
-        .update({ password_hash: passwordHash })
-        .eq("id", studentId);
-
-      if (error) throw error;
+      if (!result.success) {
+        throw new Error(result.error || "Failed to reset password");
+      }
 
       setNewPassword(password);
       toast({
         title: "Password reset",
         description: "A new password has been generated for the student.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error resetting password:", error);
       toast({
         title: "Error",
-        description: "Failed to reset password. Please try again.",
+        description: error.message || "Failed to reset password. Please try again.",
         variant: "destructive",
       });
     } finally {

@@ -4,11 +4,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { studentSchema } from "@/lib/validation";
-import { generateStudentId, generateRandomPassword, hashPassword } from "@/lib/studentAuth";
+import { generateStudentId, generateRandomPassword, generateCredentials } from "@/lib/studentAuth";
 import { CredentialsDialog } from "@/components/student/CredentialsDialog";
 
 export const AddStudentDialog = () => {
@@ -89,7 +89,6 @@ export const AddStudentDialog = () => {
       // Generate student credentials
       const loginId = await generateStudentId();
       const password = generateRandomPassword();
-      const passwordHash = await hashPassword(password);
 
       // Upload photo if selected
       let photoUrl = null;
@@ -103,14 +102,16 @@ export const AddStudentDialog = () => {
         
         if (uploadError) throw uploadError;
         
-        const { data: { publicUrl } } = supabase.storage
+        // Get signed URL instead of public URL since bucket is now private
+        const { data: signedUrlData } = await supabase.storage
           .from('student-photos')
-          .getPublicUrl(fileName);
+          .createSignedUrl(fileName, 31536000); // 1 year
         
-        photoUrl = publicUrl;
+        photoUrl = signedUrlData?.signedUrl || null;
       }
 
-      const { error } = await supabase.from("students").insert({
+      // First create the student record without password hash
+      const { data: newStudent, error } = await supabase.from("students").insert({
         name: validationResult.data.name,
         class: validationResult.data.class,
         contact_number: validationResult.data.contact_number,
@@ -120,10 +121,18 @@ export const AddStudentDialog = () => {
         remarks: validationResult.data.remarks || null,
         profile_photo_url: photoUrl,
         login_id: loginId,
-        password_hash: passwordHash,
-      });
+      }).select().single();
 
       if (error) throw error;
+
+      // Now generate credentials via edge function (bcrypt hashing)
+      const result = await generateCredentials(newStudent.id, password);
+      
+      if (!result.success) {
+        console.error("Failed to set password:", result.error);
+        // Student was created but password wasn't set - still show the dialog
+        // Admin can reset password later
+      }
 
       // Show generated credentials
       setGeneratedCredentials({ loginId, password });
@@ -268,6 +277,7 @@ export const AddStudentDialog = () => {
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {loading ? "Adding..." : "Add Student"}
             </Button>
           </DialogFooter>
