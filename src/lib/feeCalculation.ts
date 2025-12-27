@@ -1,17 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Calculate total payable amount from joining date to now
- * Business rules:
- * - Joining month becomes due AFTER it fully completes
- * - Current month is NEVER considered due (ongoing)
+ * BUSINESS RULES (LOCKED):
+ * - Joining month becomes due ONLY after it fully completes
+ * - Current month is NEVER due
  * - Paused months do not generate fees
- * 
- * Example: Student joins Oct 1, today is Dec 15
- * - October → fully completed → DUE
- * - November → fully completed → DUE  
- * - December → ongoing → NOT DUE
- * - Total = 2 months due
+ * - Payments settle earliest months first
+ */
+
+/**
+ * Calculate total payable amount till now
  */
 export const calculateTotalPayable = (
   joiningDate: Date,
@@ -19,136 +17,114 @@ export const calculateTotalPayable = (
   pausedMonths: string[] = []
 ): number => {
   const now = new Date();
-  
-  const joiningYear = joiningDate.getFullYear();
-  const joiningMonth = joiningDate.getMonth();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  
-  // Start from joining month (it becomes due after it completes)
-  const startMonth = new Date(joiningYear, joiningMonth, 1);
-  // End before current month (current month is never due)
-  const endMonth = new Date(currentYear, currentMonth, 1);
-  
-  if (startMonth >= endMonth) {
-    return 0; // Joining month hasn't completed yet
-  }
-  
-  // Count completed months from joining month up to (but not including) current month
-  let monthCount = 0;
+
+  const startMonth = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1);
+  const endMonth = new Date(now.getFullYear(), now.getMonth(), 1); // current month excluded
+
+  if (startMonth >= endMonth) return 0;
+
+  let count = 0;
   const cursor = new Date(startMonth);
-  
+
   while (cursor < endMonth) {
-    const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-    
-    // Only count if not paused
+    const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
     if (!pausedMonths.includes(monthKey)) {
-      monthCount++;
+      count++;
     }
-    
     cursor.setMonth(cursor.getMonth() + 1);
   }
-  
-  return monthCount * monthlyFee;
+
+  return count * monthlyFee;
 };
 
 /**
- * Get pending months list (months that are due)
+ * Get all chargeable months till now
+ * (NOT unpaid — just chargeable)
  */
-export const getPendingMonths = (
+export const getChargeableMonths = (
   joiningDate: Date,
   pausedMonths: string[] = []
 ): string[] => {
   const now = new Date();
-  const joiningYear = joiningDate.getFullYear();
-  const joiningMonth = joiningDate.getMonth();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  
-  // Start from joining month (becomes due after completion)
-  const startMonth = new Date(joiningYear, joiningMonth, 1);
-  // End before current month
-  const endMonth = new Date(currentYear, currentMonth, 1);
-  
-  if (startMonth >= endMonth) {
-    return [];
-  }
-  
+
+  const startMonth = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1);
+  const endMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  if (startMonth >= endMonth) return [];
+
   const months: string[] = [];
   const cursor = new Date(startMonth);
-  
+
   while (cursor < endMonth) {
-    const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-    
+    const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
     if (!pausedMonths.includes(monthKey)) {
       months.push(monthKey);
     }
-    
     cursor.setMonth(cursor.getMonth() + 1);
   }
-  
+
   return months;
 };
 
 /**
- * Format month key (YYYY-MM) to readable format
+ * Format YYYY-MM → Month Year
  */
 export const formatMonthKey = (monthKey: string): string => {
-  const [year, month] = monthKey.split('-').map(Number);
-  if (isNaN(year) || isNaN(month)) return monthKey;
-  const date = new Date(year, month - 1);
-  return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const [year, month] = monthKey.split("-").map(Number);
+  if (!year || !month) return monthKey;
+  return new Date(year, month - 1).toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
 };
 
-/**
- * Partial due information
- */
 export type PartialDueInfo = {
   isPartial: boolean;
   partialAmount: number;
-  partialMonth: string; // formatted month name
-  partialMonthKey: string; // YYYY-MM format
-  fullDueMonths: string[]; // formatted month names for full dues
+  partialMonth: string;
+  fullDueMonths: string[];
 };
 
 /**
- * Calculate partial due information
- * If totalDue < monthlyFee, it's a partial due for the earliest unpaid month
- * If totalDue >= monthlyFee, determine how many full months + any partial
+ * CORE LOGIC — THIS FIXES YOUR ISSUE
  */
 export const getPartialDueInfo = (
   totalDue: number,
   monthlyFee: number,
-  pendingMonths: string[] // Already formatted month names from getPendingMonths
+  chargeableMonths: string[],
+  totalPaid: number
 ): PartialDueInfo => {
-  if (totalDue <= 0 || pendingMonths.length === 0) {
+  if (totalDue <= 0 || chargeableMonths.length === 0) {
     return {
       isPartial: false,
       partialAmount: 0,
-      partialMonth: '',
-      partialMonthKey: '',
+      partialMonth: "",
       fullDueMonths: [],
     };
   }
 
-  const fullMonthsCount = Math.floor(totalDue / monthlyFee);
+  // Payments always clear earliest months first
+  const paidFullMonths = Math.floor(totalPaid / monthlyFee);
+  const unpaidMonths = chargeableMonths.slice(paidFullMonths);
+
+  const fullDueCount = Math.floor(totalDue / monthlyFee);
   const partialAmount = totalDue % monthlyFee;
   const isPartial = partialAmount > 0;
 
-  // Full due months are the earliest ones
-  const fullDueMonths = pendingMonths.slice(0, fullMonthsCount);
-  
-  // Partial month is the next one after full months (if there's a partial)
-  const partialMonthKey = isPartial && pendingMonths.length > fullMonthsCount
-    ? pendingMonths[fullMonthsCount]
-    : '';
+  const fullDueMonths = unpaidMonths
+    .slice(0, fullDueCount)
+    .map(formatMonthKey);
+
+  const partialMonth =
+    isPartial && unpaidMonths.length > fullDueCount
+      ? formatMonthKey(unpaidMonths[fullDueCount])
+      : "";
 
   return {
     isPartial,
     partialAmount,
-    partialMonth: partialMonthKey ? formatMonthKey(partialMonthKey) : '',
-    partialMonthKey,
-    fullDueMonths: fullDueMonths.map(formatMonthKey),
+    partialMonth,
+    fullDueMonths,
   };
 };
 
@@ -158,42 +134,47 @@ export const getPartialDueInfo = (
 export const calculateTotalPaidFromPayments = (
   payments: { amount_paid: number }[]
 ): number => {
-  return payments.reduce((sum, p) => sum + Number(p.amount_paid), 0);
+  return payments.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0);
 };
 
 /**
- * Fetch and calculate all fee data for a student
- * This is the single source of truth for fee calculations
+ * SINGLE SOURCE OF TRUTH
  */
 export const getStudentFeeData = async (studentId: string) => {
   const [studentResult, paymentsResult] = await Promise.all([
-    supabase.from('students').select('*').eq('id', studentId).single(),
-    supabase.from('payments').select('*').eq('student_id', studentId),
+    supabase.from("students").select("*").eq("id", studentId).single(),
+    supabase.from("payments").select("amount_paid").eq("student_id", studentId),
   ]);
-  
-  if (!studentResult.data) {
-    return null;
-  }
-  
+
+  if (!studentResult.data) return null;
+
   const student = studentResult.data;
   const payments = paymentsResult.data || [];
-  
+
   const joiningDate = new Date(student.joining_date);
   const pausedMonths = student.paused_months || [];
   const monthlyFee = Number(student.monthly_fee);
-  
+
   const totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
   const totalPaid = calculateTotalPaidFromPayments(payments);
   const totalDue = Math.max(0, totalPayable - totalPaid);
-  const pendingMonths = getPendingMonths(joiningDate, pausedMonths);
-  
+
+  const chargeableMonths = getChargeableMonths(joiningDate, pausedMonths);
+
+  const partialDueInfo = getPartialDueInfo(
+    totalDue,
+    monthlyFee,
+    chargeableMonths,
+    totalPaid
+  );
+
   return {
     student,
     payments,
     totalPayable,
     totalPaid,
     totalDue,
-    pendingMonths,
-    pendingMonthsFormatted: pendingMonths.map(formatMonthKey),
+    chargeableMonths: chargeableMonths.map(formatMonthKey),
+    partialDueInfo,
   };
 };
