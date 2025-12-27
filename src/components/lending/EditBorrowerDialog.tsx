@@ -101,10 +101,11 @@ export function EditBorrowerDialog({
           .upload(filePath, selectedImage, { upsert: true });
 
         if (!uploadError) {
-          const { data: urlData } = supabase.storage
+          // Use signed URL for private bucket (1 year expiry)
+          const { data: signedUrlData } = await supabase.storage
             .from('borrower-photos')
-            .getPublicUrl(filePath);
-          photoUrl = urlData.publicUrl;
+            .createSignedUrl(filePath, 31536000);
+          photoUrl = signedUrlData?.signedUrl || null;
         }
       } else if (imagePreview === null && borrower.profile_photo_url) {
         // Photo was cleared
