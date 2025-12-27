@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Session } from "@supabase/supabase-js";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -29,31 +27,10 @@ const DAYS_OF_WEEK = [
 ];
 
 const Routine = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
   const [routines, setRoutines] = useState<RoutineSlot[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (!session) {
-        navigate("/auth");
-      }
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (!session) {
-        navigate("/auth");
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+  const [loading, setLoading] = useState(true);
 
   const fetchRoutines = async () => {
     const { data, error } = await supabase
@@ -70,13 +47,12 @@ const Routine = () => {
     } else {
       setRoutines(data || []);
     }
+    setLoading(false);
   };
 
   useEffect(() => {
-    if (session) {
-      fetchRoutines();
-    }
-  }, [session]);
+    fetchRoutines();
+  }, []);
 
   const groupedRoutines = DAYS_OF_WEEK.map((day) => ({
     day,
@@ -90,8 +66,6 @@ const Routine = () => {
       </div>
     );
   }
-
-  if (!session) return null;
 
   return (
     <div className="min-h-screen bg-background">

@@ -118,8 +118,10 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
       if (photoFile) {
         // Delete old photo if exists
         if (student.profile_photo_url) {
-          const oldFileName = student.profile_photo_url.split('/').pop();
-          if (oldFileName) {
+          // Extract file path from signed URL or direct path
+          const urlParts = student.profile_photo_url.split('/student-photos/');
+          if (urlParts[1]) {
+            const oldFileName = urlParts[1].split('?')[0]; // Remove query params
             await supabase.storage.from('student-photos').remove([oldFileName]);
           }
         }
@@ -134,11 +136,12 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
         
         if (uploadError) throw uploadError;
         
-        const { data: { publicUrl } } = supabase.storage
+        // Use signed URL for private bucket (1 year expiry)
+        const { data: signedUrlData } = await supabase.storage
           .from('student-photos')
-          .getPublicUrl(fileName);
+          .createSignedUrl(fileName, 31536000);
         
-        photoUrl = publicUrl;
+        photoUrl = signedUrlData?.signedUrl || null;
       }
 
       const { error } = await supabase

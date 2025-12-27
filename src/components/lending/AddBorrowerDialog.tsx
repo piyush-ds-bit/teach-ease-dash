@@ -97,13 +97,14 @@ export function AddBorrowerDialog({ onBorrowerAdded }: AddBorrowerDialogProps) {
           .upload(filePath, selectedImage, { upsert: true });
 
         if (!uploadError) {
-          const { data: urlData } = supabase.storage
+          // Use signed URL for private bucket (1 year expiry)
+          const { data: signedUrlData } = await supabase.storage
             .from('borrower-photos')
-            .getPublicUrl(filePath);
+            .createSignedUrl(filePath, 31536000);
 
           await supabase
             .from('borrowers')
-            .update({ profile_photo_url: urlData.publicUrl })
+            .update({ profile_photo_url: signedUrlData?.signedUrl || null })
             .eq('id', borrower.id);
         }
       }
