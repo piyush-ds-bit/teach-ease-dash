@@ -220,12 +220,38 @@ async function handleLogin(supabaseAdmin: any, { login_id, password }: LoginRequ
 }
 
 async function handleGenerateCredentials(supabaseAdmin: any, { student_id, password }: GenerateCredentialsRequest, req: Request) {
-  // Verify admin auth
+  // Verify admin auth - extract and validate JWT token
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Extract token and verify user
+  const token = authHeader.replace("Bearer ", "");
+  const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+  
+  if (userError || !user) {
+    console.error("Token verification failed:", userError);
+    return new Response(
+      JSON.stringify({ error: "Invalid or expired token" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Verify user has admin role using has_role function
+  const { data: hasAdminRole, error: roleError } = await supabaseAdmin.rpc("has_role", {
+    _user_id: user.id,
+    _role: "admin"
+  });
+
+  if (roleError || !hasAdminRole) {
+    console.error("Admin role check failed:", roleError);
+    return new Response(
+      JSON.stringify({ error: "Access denied. Admin privileges required." }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
@@ -237,9 +263,25 @@ async function handleGenerateCredentials(supabaseAdmin: any, { student_id, passw
     );
   }
 
+  // Validate student_id is valid UUID format
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(student_id)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid student ID format" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   if (password.length < 8) {
     return new Response(
       JSON.stringify({ error: "Password must be at least 8 characters" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  if (password.length > 128) {
+    return new Response(
+      JSON.stringify({ error: "Password too long" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -268,12 +310,38 @@ async function handleGenerateCredentials(supabaseAdmin: any, { student_id, passw
 }
 
 async function handleResetPassword(supabaseAdmin: any, { student_id, new_password }: ResetPasswordRequest, req: Request) {
-  // Verify admin auth
+  // Verify admin auth - extract and validate JWT token
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Extract token and verify user
+  const token = authHeader.replace("Bearer ", "");
+  const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+  
+  if (userError || !user) {
+    console.error("Token verification failed:", userError);
+    return new Response(
+      JSON.stringify({ error: "Invalid or expired token" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Verify user has admin role using has_role function
+  const { data: hasAdminRole, error: roleError } = await supabaseAdmin.rpc("has_role", {
+    _user_id: user.id,
+    _role: "admin"
+  });
+
+  if (roleError || !hasAdminRole) {
+    console.error("Admin role check failed:", roleError);
+    return new Response(
+      JSON.stringify({ error: "Access denied. Admin privileges required." }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
@@ -285,9 +353,25 @@ async function handleResetPassword(supabaseAdmin: any, { student_id, new_passwor
     );
   }
 
+  // Validate student_id is valid UUID format
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(student_id)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid student ID format" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   if (new_password.length < 8) {
     return new Response(
       JSON.stringify({ error: "Password must be at least 8 characters" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  if (new_password.length > 128) {
+    return new Response(
+      JSON.stringify({ error: "Password too long" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
