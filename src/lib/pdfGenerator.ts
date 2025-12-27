@@ -198,8 +198,10 @@ export const generateReceipt = async (data: ReceiptData) => {
   yPos += lineHeight;
   pdf.setFont("helvetica", "normal");
   
-  // Calculate partial due info
-  const partialDueInfo = getPartialDueInfo(data.totalDue, data.monthlyFee, data.pendingMonths);
+  // Calculate partial due info - need to estimate totalPaid from due and pending months
+  const totalPayable = data.pendingMonths.length * data.monthlyFee;
+  const totalPaid = Math.max(0, totalPayable - data.totalDue);
+  const partialDueInfo = getPartialDueInfo(data.totalDue, data.monthlyFee, data.pendingMonths, totalPaid);
   
   // Display pending months with partial due handling
   if (data.totalDue > 0) {

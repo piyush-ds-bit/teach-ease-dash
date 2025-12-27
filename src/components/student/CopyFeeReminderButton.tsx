@@ -50,8 +50,11 @@ export const CopyFeeReminderButton = ({
     const amountText = `₹${totalDue.toLocaleString('en-IN')}`;
     
     // Handle partial due in message
-    if (monthlyFee > 0 && totalDue > 0) {
-      const partialInfo = getPartialDueInfo(totalDue, monthlyFee, pendingMonths);
+    if (monthlyFee > 0 && totalDue > 0 && pendingMonths.length > 0) {
+      // Calculate total paid to determine which months are unpaid
+      const totalPayable = pendingMonths.length * monthlyFee;
+      const totalPaid = Math.max(0, totalPayable - totalDue);
+      const partialInfo = getPartialDueInfo(totalDue, monthlyFee, pendingMonths, totalPaid);
       
       if (partialInfo.isPartial && partialInfo.fullDueMonths.length === 0) {
         // Only partial due

@@ -19,7 +19,7 @@ import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
 import { CopyFeeReminderButton } from "@/components/student/CopyFeeReminderButton";
 import { useLedger } from "@/hooks/useLedger";
 import { getStudentStatusFromData } from "@/lib/statusCalculation";
-import { calculateTotalPayable, calculateTotalPaidFromPayments, getPendingMonths, formatMonthKey } from "@/lib/feeCalculation";
+import { calculateTotalPayable, calculateTotalPaidFromPayments, getChargeableMonths, formatMonthKey } from "@/lib/feeCalculation";
 
 type Student = {
   id: string;
@@ -148,7 +148,7 @@ const StudentProfile = () => {
       const totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
       const totalPaid = calculateTotalPaidFromPayments(paymentsData);
       const totalDue = Math.max(0, totalPayable - totalPaid);
-      const pendingMonths = getPendingMonths(joiningDate, pausedMonths);
+      const pendingMonths = getChargeableMonths(joiningDate, pausedMonths);
       
       setFeeData({
         totalPayable,
