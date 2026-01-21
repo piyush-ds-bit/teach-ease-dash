@@ -313,6 +313,42 @@ export type Database = {
         }
         Relationships: []
       }
+      teachers: {
+        Row: {
+          created_at: string
+          created_by: string
+          email: string
+          full_name: string
+          id: string
+          phone: string | null
+          status: Database["public"]["Enums"]["teacher_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          email: string
+          full_name: string
+          id?: string
+          phone?: string | null
+          status?: Database["public"]["Enums"]["teacher_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          email?: string
+          full_name?: string
+          id?: string
+          phone?: string | null
+          status?: Database["public"]["Enums"]["teacher_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_preferences: {
         Row: {
           created_at: string
@@ -377,6 +413,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "user" | "teacher"
       interest_type: "simple_monthly" | "simple_yearly" | "zero_interest"
+      teacher_status: "active" | "suspended"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -506,6 +543,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "user", "teacher"],
       interest_type: ["simple_monthly", "simple_yearly", "zero_interest"],
+      teacher_status: ["active", "suspended"],
     },
   },
 } as const
