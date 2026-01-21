@@ -23,6 +23,7 @@ export type Database = {
           interest_rate: number | null
           interest_type: Database["public"]["Enums"]["interest_type"]
           loan_start_date: string
+          merged_into_borrower_id: string | null
           name: string
           notes: string | null
           principal_amount: number
@@ -37,6 +38,7 @@ export type Database = {
           interest_rate?: number | null
           interest_type?: Database["public"]["Enums"]["interest_type"]
           loan_start_date: string
+          merged_into_borrower_id?: string | null
           name: string
           notes?: string | null
           principal_amount: number
@@ -51,13 +53,22 @@ export type Database = {
           interest_rate?: number | null
           interest_type?: Database["public"]["Enums"]["interest_type"]
           loan_start_date?: string
+          merged_into_borrower_id?: string | null
           name?: string
           notes?: string | null
           principal_amount?: number
           profile_photo_url?: string | null
           teacher_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "borrowers_merged_into_borrower_id_fkey"
+            columns: ["merged_into_borrower_id"]
+            isOneToOne: false
+            referencedRelation: "borrowers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fee_ledger: {
         Row: {
@@ -156,6 +167,7 @@ export type Database = {
           entry_date: string
           entry_type: string
           id: string
+          loan_id: string | null
           metadata: Json | null
           teacher_id: string | null
         }
@@ -167,6 +179,7 @@ export type Database = {
           entry_date: string
           entry_type: string
           id?: string
+          loan_id?: string | null
           metadata?: Json | null
           teacher_id?: string | null
         }
@@ -178,12 +191,70 @@ export type Database = {
           entry_date?: string
           entry_type?: string
           id?: string
+          loan_id?: string | null
           metadata?: Json | null
           teacher_id?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "lending_ledger_borrower_id_fkey"
+            columns: ["borrower_id"]
+            isOneToOne: false
+            referencedRelation: "borrowers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lending_ledger_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loans: {
+        Row: {
+          borrower_id: string
+          created_at: string
+          id: string
+          interest_rate: number | null
+          interest_type: Database["public"]["Enums"]["interest_type"]
+          legacy_borrower_id: string | null
+          principal_amount: number
+          settled_at: string | null
+          start_date: string
+          status: Database["public"]["Enums"]["loan_status"]
+          teacher_id: string | null
+        }
+        Insert: {
+          borrower_id: string
+          created_at?: string
+          id?: string
+          interest_rate?: number | null
+          interest_type?: Database["public"]["Enums"]["interest_type"]
+          legacy_borrower_id?: string | null
+          principal_amount: number
+          settled_at?: string | null
+          start_date: string
+          status?: Database["public"]["Enums"]["loan_status"]
+          teacher_id?: string | null
+        }
+        Update: {
+          borrower_id?: string
+          created_at?: string
+          id?: string
+          interest_rate?: number | null
+          interest_type?: Database["public"]["Enums"]["interest_type"]
+          legacy_borrower_id?: string | null
+          principal_amount?: number
+          settled_at?: string | null
+          start_date?: string
+          status?: Database["public"]["Enums"]["loan_status"]
+          teacher_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loans_borrower_id_fkey"
             columns: ["borrower_id"]
             isOneToOne: false
             referencedRelation: "borrowers"
@@ -413,6 +484,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "user" | "teacher" | "super_admin"
       interest_type: "simple_monthly" | "simple_yearly" | "zero_interest"
+      loan_status: "active" | "settled"
       teacher_status: "active" | "suspended"
     }
     CompositeTypes: {
@@ -543,6 +615,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "user", "teacher", "super_admin"],
       interest_type: ["simple_monthly", "simple_yearly", "zero_interest"],
+      loan_status: ["active", "settled"],
       teacher_status: ["active", "suspended"],
     },
   },
