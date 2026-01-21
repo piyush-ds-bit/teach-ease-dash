@@ -10,6 +10,19 @@ import { EditBorrowerDialog } from "@/components/lending/EditBorrowerDialog";
 import { DeleteBorrowerDialog } from "@/components/lending/DeleteBorrowerDialog";
 import { useLendingLedger } from "@/hooks/useLendingLedger";
 import { useBorrowerLoans } from "@/hooks/useBorrowerLoans";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   Borrower,
   Loan,
@@ -24,6 +37,7 @@ import { format, parseISO } from "date-fns";
 export default function BorrowerProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [borrower, setBorrower] = useState<Borrower | null>(null);
   const [loading, setLoading] = useState(true);
   const { entries } = useLendingLedger(id);
@@ -33,6 +47,7 @@ export default function BorrowerProfile() {
   const [editBorrowerOpen, setEditBorrowerOpen] = useState(false);
   const [deleteBorrowerOpen, setDeleteBorrowerOpen] = useState(false);
   const [activeLoanSheet, setActiveLoanSheet] = useState<Loan | null>(null);
+  const [linkingLegacy, setLinkingLegacy] = useState(false);
 
   const loadBorrower = async () => {
     if (!id) return;
@@ -70,6 +85,42 @@ export default function BorrowerProfile() {
   const legacyEntries = useMemo(() => {
     return entries.filter((e) => !(e as any).loan_id);
   }, [entries]);
+
+  const linkLegacyEntriesToLoans = async () => {
+    if (!borrower) return;
+    if (legacyEntries.length === 0) return;
+    if (loans.length === 0) {
+      toast({
+        title: "No loans to link",
+        description: "Create at least one loan for this borrower before linking legacy entries.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLinkingLegacy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("lending-link-legacy", {
+        body: { borrowerId: borrower.id },
+      });
+
+      if (error) throw error;
+      const linked = Number((data as any)?.linked ?? legacyEntries.length);
+
+      toast({
+        title: "Legacy entries linked",
+        description: `Linked ${linked} entries to existing loans.`,
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to link legacy entries",
+        variant: "destructive",
+      });
+    } finally {
+      setLinkingLegacy(false);
+    }
+  };
 
   const activeLoan = useMemo(() => loans.find((l) => l.status === "active") || null, [loans]);
   const hasActiveLoan = !!activeLoan;
@@ -170,6 +221,40 @@ export default function BorrowerProfile() {
               </div>
             )}
           </div>
+
+          {legacyEntries.length > 0 && loans.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Legacy ledger entries detected</p>
+                <p className="text-sm text-muted-foreground">
+                  These entries have no loan ID yet. You can link them to existing loans (non-destructive).
+                </p>
+              </div>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" disabled={linkingLegacy}>
+                    {linkingLegacy ? "Linking..." : "Link legacy entries"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Link legacy entries to loans?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      We’ll attach each legacy entry to the most recent loan that started on or before the entry date.
+                      This does not delete or modify amounts—only fills the missing loan reference.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={linkingLegacy}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={linkLegacyEntriesToLoans} disabled={linkingLegacy}>
+                      Confirm
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
 
           <LoanHistoryTable
             loans={loans}
