@@ -6,20 +6,23 @@ import { LendingTimeline } from "@/components/lending/LendingTimeline";
 import { AddLoanPaymentDialog } from "@/components/lending/AddLoanPaymentDialog";
 import { calculateLoanSummary, formatInterestType, type LendingLedgerEntry, type Loan } from "@/lib/lendingCalculation";
 import { format, parseISO } from "date-fns";
+import { useLoanLedger } from "@/hooks/useLoanLedger";
 
 interface LoanDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   borrowerId: string;
   loan: Loan | null;
-  entries: LendingLedgerEntry[];
+  entries?: LendingLedgerEntry[];
 }
 
 export function LoanDetailSheet({ open, onOpenChange, borrowerId, loan, entries }: LoanDetailSheetProps) {
+  const { entries: liveEntries } = useLoanLedger(loan?.id);
+
   const summary = useMemo(() => {
     if (!loan) return null;
-    return calculateLoanSummary(loan, entries);
-  }, [loan, entries]);
+    return calculateLoanSummary(loan, (entries ?? liveEntries) as LendingLedgerEntry[]);
+  }, [loan, entries, liveEntries]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -47,7 +50,7 @@ export function LoanDetailSheet({ open, onOpenChange, borrowerId, loan, entries 
 
               <Separator />
 
-              <LendingTimeline entries={entries} />
+              <LendingTimeline entries={(entries ?? liveEntries) as LendingLedgerEntry[]} />
             </div>
           </>
         )}
