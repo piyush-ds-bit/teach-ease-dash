@@ -1,11 +1,10 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Pencil, Trash2, Phone, Calendar, FileText } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Phone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Borrower, formatInterestType, formatRupees } from "@/lib/lendingCalculation";
+import { Borrower } from "@/lib/lendingCalculation";
 import { LendingStatusBadge } from "./LendingStatusBadge";
-import { format, parseISO } from "date-fns";
 
 interface BorrowerHeaderProps {
   borrower: Borrower;
@@ -64,19 +63,6 @@ export function BorrowerHeader({ borrower, isCleared, onEdit, onDelete }: Borrow
                   <span>{borrower.contact_number}</span>
                 </div>
               )}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>Loan Start: {format(parseISO(borrower.loan_start_date), 'dd MMM yyyy')}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <FileText className="h-4 w-4" />
-                <span>Principal: {formatRupees(borrower.principal_amount)}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="font-medium">
-                  {formatInterestType(borrower.interest_type, borrower.interest_rate)}
-                </span>
-              </div>
             </div>
 
             {borrower.notes && (
