@@ -9,33 +9,44 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { supabase } from "@/integrations/supabase/client";
-import { getStudentSession } from "@/lib/studentAuth";
 import { AdminCalculator } from "./AdminCalculator";
 
 export function CalculatorButton() {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAllowed, setIsAllowed] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const checkAdmin = async () => {
+    const checkAccess = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      const studentSession = getStudentSession();
-      // Admin = has Supabase auth session AND no student session
-      setIsAdmin(!!session && !studentSession);
+      if (!session) {
+        setIsAllowed(false);
+        return;
+      }
+
+      // Calculator is available only to authenticated teachers/admins
+      const [{ data: isAdmin }, { data: isTeacher }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: session.user.id, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: session.user.id, _role: "teacher" }),
+      ]);
+
+      setIsAllowed(Boolean(isAdmin || isTeacher));
     };
 
-    checkAdmin();
+    checkAccess();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      const studentSession = getStudentSession();
-      setIsAdmin(!!session && !studentSession);
+      if (!session) {
+        setIsAllowed(false);
+        return;
+      }
+      checkAccess();
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Don't render for non-admins
-  if (!isAdmin) return null;
+  // Don't render for non-teachers/admins
+  if (!isAllowed) return null;
 
   return (
     <Drawer open={open} onOpenChange={setOpen}>

@@ -8,8 +8,6 @@ import { Plus, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { studentSchema } from "@/lib/validation";
-import { generateStudentId, generateRandomPassword, generateCredentials } from "@/lib/studentAuth";
-import { CredentialsDialog } from "@/components/student/CredentialsDialog";
 
 export const AddStudentDialog = () => {
   const { toast } = useToast();
@@ -17,8 +15,6 @@ export const AddStudentDialog = () => {
   const [loading, setLoading] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
-  const [credentialsOpen, setCredentialsOpen] = useState(false);
-  const [generatedCredentials, setGeneratedCredentials] = useState({ loginId: "", password: "" });
   const [formData, setFormData] = useState({
     name: "",
     class: "",
@@ -86,10 +82,6 @@ export const AddStudentDialog = () => {
         throw new Error(errors);
       }
 
-      // Generate student credentials
-      const loginId = await generateStudentId();
-      const password = generateRandomPassword();
-
       // Upload photo if selected
       let photoUrl = null;
       if (photoFile) {
@@ -120,22 +112,9 @@ export const AddStudentDialog = () => {
         subject: formData.subject || null,
         remarks: validationResult.data.remarks || null,
         profile_photo_url: photoUrl,
-        login_id: loginId,
       }).select().single();
 
       if (error) throw error;
-
-      // Now generate credentials via edge function (bcrypt hashing)
-      const result = await generateCredentials(newStudent.id, password);
-      
-      if (!result.success) {
-        console.error("Failed to set password:", result.error);
-        // Student was created but password wasn't set - still show the dialog
-        // Admin can reset password later
-      }
-
-      // Show generated credentials
-      setGeneratedCredentials({ loginId, password });
 
       toast({
         title: "Success",
@@ -143,14 +122,10 @@ export const AddStudentDialog = () => {
       });
 
       setOpen(false);
-      setCredentialsOpen(true);
       setPhotoFile(null);
       setPhotoPreview("");
-      
-      // Reload after credentials dialog is closed
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
+      // Keep existing behavior of refreshing the list
+      window.location.reload();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -283,13 +258,6 @@ export const AddStudentDialog = () => {
           </DialogFooter>
         </form>
       </DialogContent>
-      <CredentialsDialog
-        open={credentialsOpen}
-        onOpenChange={setCredentialsOpen}
-        loginId={generatedCredentials.loginId}
-        password={generatedCredentials.password}
-        studentName={formData.name}
-      />
     </Dialog>
   );
 };
