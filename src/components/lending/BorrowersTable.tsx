@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,19 +9,20 @@ import { useNavigate } from "react-router-dom";
 import { Search, Eye, Loader2 } from "lucide-react";
 import { 
   Borrower, 
-  calculateBorrowerSummary, 
-  formatInterestType, 
+  Loan,
+  calculateBorrowerSummary,
+  calculateLoanSummary,
   formatRupees, 
-  isLoanCleared,
   LendingLedgerEntry
 } from "@/lib/lendingCalculation";
 import { LendingStatusBadge } from "./LendingStatusBadge";
-import { AddBorrowerDialog } from "./AddBorrowerDialog";
+import { AddLoanDialog } from "./AddLoanDialog";
 
 export function BorrowersTable() {
   const navigate = useNavigate();
   const [borrowers, setBorrowers] = useState<Borrower[]>([]);
-  const [ledgerEntries, setLedgerEntries] = useState<Record<string, LendingLedgerEntry[]>>({});
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [ledgerEntries, setLedgerEntries] = useState<LendingLedgerEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +32,7 @@ export function BorrowersTable() {
       const { data: borrowersData, error: borrowersError } = await supabase
         .from('borrowers')
         .select('*')
+        .is('merged_into_borrower_id', null)
         .order('created_at', { ascending: false });
 
       if (borrowersError) throw borrowersError;
@@ -38,23 +40,25 @@ export function BorrowersTable() {
       const typedBorrowers = (borrowersData || []) as Borrower[];
       setBorrowers(typedBorrowers);
 
-      // Load all ledger entries
+      if (typedBorrowers.length === 0) {
+        setLoans([]);
+        setLedgerEntries([]);
+        return;
+      }
+
+      const { data: loansData } = await supabase
+        .from('loans')
+        .select('*')
+        .in('borrower_id', typedBorrowers.map((b) => b.id));
+      setLoans((loansData || []) as Loan[]);
+
       const { data: ledgerData, error: ledgerError } = await supabase
         .from('lending_ledger')
         .select('*')
-        .in('borrower_id', typedBorrowers.map(b => b.id));
+        .in('borrower_id', typedBorrowers.map((b) => b.id));
 
       if (ledgerError) throw ledgerError;
-
-      // Group entries by borrower_id
-      const entriesByBorrower: Record<string, LendingLedgerEntry[]> = {};
-      for (const entry of (ledgerData || []) as LendingLedgerEntry[]) {
-        if (!entriesByBorrower[entry.borrower_id]) {
-          entriesByBorrower[entry.borrower_id] = [];
-        }
-        entriesByBorrower[entry.borrower_id].push(entry);
-      }
-      setLedgerEntries(entriesByBorrower);
+      setLedgerEntries((ledgerData || []) as LendingLedgerEntry[]);
     } catch (error) {
       console.error('Error loading borrowers:', error);
     } finally {
@@ -86,6 +90,44 @@ export function BorrowersTable() {
     b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const activeLoanByBorrowerId = useMemo(() => {
+    const map = new Map<string, Loan>();
+    for (const loan of loans) {
+      if (loan.status !== 'active') continue;
+      const existing = map.get(loan.borrower_id);
+      if (!existing) {
+        map.set(loan.borrower_id, loan);
+        continue;
+      }
+      if (new Date(loan.start_date).getTime() > new Date(existing.start_date).getTime()) {
+        map.set(loan.borrower_id, loan);
+      }
+    }
+    return map;
+  }, [loans]);
+
+  const entriesByLoanId = useMemo(() => {
+    const map: Record<string, LendingLedgerEntry[]> = {};
+    for (const entry of ledgerEntries) {
+      const loanId = (entry as any).loan_id as string | null | undefined;
+      if (!loanId) continue;
+      if (!map[loanId]) map[loanId] = [];
+      map[loanId].push(entry);
+    }
+    return map;
+  }, [ledgerEntries]);
+
+  const legacyEntriesByBorrowerId = useMemo(() => {
+    const map: Record<string, LendingLedgerEntry[]> = {};
+    for (const entry of ledgerEntries) {
+      const loanId = (entry as any).loan_id as string | null | undefined;
+      if (loanId) continue;
+      if (!map[entry.borrower_id]) map[entry.borrower_id] = [];
+      map[entry.borrower_id].push(entry);
+    }
+    return map;
+  }, [ledgerEntries]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -98,7 +140,7 @@ export function BorrowersTable() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle className="text-xl">Borrowers</CardTitle>
-        <AddBorrowerDialog onBorrowerAdded={loadData} />
+        <AddLoanDialog borrowers={borrowers} onCompleted={loadData} />
       </CardHeader>
       <CardContent>
         <div className="relative mb-4">
@@ -123,18 +165,22 @@ export function BorrowersTable() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead className="hidden sm:table-cell">Principal</TableHead>
-                  <TableHead className="hidden md:table-cell">Interest</TableHead>
-                  <TableHead>Balance</TableHead>
+                  <TableHead className="hidden sm:table-cell">Active Loan</TableHead>
+                  <TableHead>Active Due</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredBorrowers.map((borrower) => {
-                  const entries = ledgerEntries[borrower.id] || [];
-                  const summary = calculateBorrowerSummary(borrower, entries);
-                  const cleared = isLoanCleared(summary);
+                  const activeLoan = activeLoanByBorrowerId.get(borrower.id) || null;
+                  const legacyEntries = legacyEntriesByBorrowerId[borrower.id] || [];
+
+                  const activeSummary = activeLoan
+                    ? calculateLoanSummary(activeLoan, entriesByLoanId[activeLoan.id] || [])
+                    : calculateBorrowerSummary(borrower, legacyEntries);
+
+                  const hasActiveLoan = !!activeLoan;
 
                   return (
                     <TableRow key={borrower.id}>
@@ -148,27 +194,22 @@ export function BorrowersTable() {
                           </Avatar>
                           <div>
                             <p className="font-medium">{borrower.name}</p>
-                            <p className="text-xs text-muted-foreground sm:hidden">
-                              {formatRupees(borrower.principal_amount)}
-                            </p>
+                            {borrower.contact_number && (
+                              <p className="text-xs text-muted-foreground sm:hidden">{borrower.contact_number}</p>
+                            )}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        {formatRupees(borrower.principal_amount)}
+                        {activeLoan ? formatRupees(activeLoan.principal_amount) : "—"}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <span className="text-sm">
-                          {formatInterestType(borrower.interest_type, borrower.interest_rate)}
+                      <TableCell>
+                        <span className={activeSummary.remainingBalance > 0 ? "font-medium" : "text-muted-foreground"}>
+                          {formatRupees(activeSummary.remainingBalance)}
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className={summary.remainingBalance > 0 ? "text-red-600 font-medium" : "text-green-600 font-medium"}>
-                          {formatRupees(summary.remainingBalance)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <LendingStatusBadge isCleared={cleared} />
+                        <LendingStatusBadge isCleared={!hasActiveLoan} />
                       </TableCell>
                       <TableCell className="text-right">
                         <Button

@@ -4,15 +4,30 @@ export type InterestType = 'simple_monthly' | 'simple_yearly' | 'zero_interest';
 
 export type LedgerEntryType = 'PRINCIPAL' | 'INTEREST_ACCRUAL' | 'PAYMENT' | 'ADJUSTMENT';
 
+export type LoanStatus = 'active' | 'settled';
+
 export interface LendingLedgerEntry {
   id: string;
   borrower_id: string;
+  loan_id?: string | null;
   entry_type: LedgerEntryType;
   amount: number;
   description: string | null;
   entry_date: string;
   created_at: string;
   metadata: Record<string, unknown>;
+}
+
+export interface Loan {
+  id: string;
+  borrower_id: string;
+  principal_amount: number;
+  interest_type: InterestType;
+  interest_rate: number | null;
+  start_date: string;
+  status: LoanStatus;
+  settled_at: string | null;
+  created_at: string;
 }
 
 export interface LendingSummary {
@@ -35,6 +50,52 @@ export interface Borrower {
   duration_months: number | null;
   notes: string | null;
   created_at: string;
+}
+
+/**
+ * Loan-scoped summary (preferred model).
+ * - Interest is computed from the loan itself (not borrower)
+ * - If loan is settled, remainingBalance is always 0
+ */
+export function calculateLoanSummary(loan: Loan, entries: LendingLedgerEntry[]): LendingSummary {
+  // Settled loans are read-only history: due is 0 forever.
+  if (loan.status === 'settled') {
+    const ledgerSummary = calculateLendingSummary(entries);
+    return {
+      principal: loan.principal_amount,
+      interestAccrued: 0,
+      totalPaid: ledgerSummary.totalPaid,
+      totalDue: loan.principal_amount,
+      remainingBalance: 0,
+    };
+  }
+
+  const ledgerSummary = calculateLendingSummary(entries);
+  const principal = loan.principal_amount;
+  const interestType = loan.interest_type;
+  const rate = Number(loan.interest_rate ?? 0);
+
+  if (interestType === 'zero_interest') {
+    return {
+      principal,
+      interestAccrued: 0,
+      totalPaid: ledgerSummary.totalPaid,
+      totalDue: principal,
+      remainingBalance: Math.max(0, principal - ledgerSummary.totalPaid),
+    };
+  }
+
+  const calculatedInterest = calculateInterest(principal, rate, interestType, loan.start_date);
+  const totalDue = principal + calculatedInterest;
+  const remainingBalance = totalDue - ledgerSummary.totalPaid;
+
+  return {
+    principal,
+    interestAccrued: calculatedInterest,
+    totalPaid: ledgerSummary.totalPaid,
+    totalDue,
+    remainingBalance: Math.max(0, remainingBalance),
+  };
 }
 
 /**
