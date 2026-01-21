@@ -27,6 +27,7 @@ export type Database = {
           notes: string | null
           principal_amount: number
           profile_photo_url: string | null
+          teacher_id: string | null
         }
         Insert: {
           contact_number?: string | null
@@ -40,6 +41,7 @@ export type Database = {
           notes?: string | null
           principal_amount: number
           profile_photo_url?: string | null
+          teacher_id?: string | null
         }
         Update: {
           contact_number?: string | null
@@ -53,6 +55,7 @@ export type Database = {
           notes?: string | null
           principal_amount?: number
           profile_photo_url?: string | null
+          teacher_id?: string | null
         }
         Relationships: []
       }
@@ -66,6 +69,7 @@ export type Database = {
           metadata: Json | null
           month_key: string
           student_id: string
+          teacher_id: string | null
         }
         Insert: {
           amount?: number
@@ -76,6 +80,7 @@ export type Database = {
           metadata?: Json | null
           month_key: string
           student_id: string
+          teacher_id?: string | null
         }
         Update: {
           amount?: number
@@ -86,6 +91,7 @@ export type Database = {
           metadata?: Json | null
           month_key?: string
           student_id?: string
+          teacher_id?: string | null
         }
         Relationships: [
           {
@@ -105,6 +111,7 @@ export type Database = {
           due_date: string
           id: string
           student_id: string
+          teacher_id: string | null
           title: string
           updated_at: string | null
         }
@@ -115,6 +122,7 @@ export type Database = {
           due_date: string
           id?: string
           student_id: string
+          teacher_id?: string | null
           title: string
           updated_at?: string | null
         }
@@ -125,6 +133,7 @@ export type Database = {
           due_date?: string
           id?: string
           student_id?: string
+          teacher_id?: string | null
           title?: string
           updated_at?: string | null
         }
@@ -148,6 +157,7 @@ export type Database = {
           entry_type: string
           id: string
           metadata: Json | null
+          teacher_id: string | null
         }
         Insert: {
           amount: number
@@ -158,6 +168,7 @@ export type Database = {
           entry_type: string
           id?: string
           metadata?: Json | null
+          teacher_id?: string | null
         }
         Update: {
           amount?: number
@@ -168,6 +179,7 @@ export type Database = {
           entry_type?: string
           id?: string
           metadata?: Json | null
+          teacher_id?: string | null
         }
         Relationships: [
           {
@@ -189,6 +201,7 @@ export type Database = {
           payment_mode: string
           proof_image_url: string | null
           student_id: string
+          teacher_id: string | null
           transaction_id: string | null
         }
         Insert: {
@@ -200,6 +213,7 @@ export type Database = {
           payment_mode: string
           proof_image_url?: string | null
           student_id: string
+          teacher_id?: string | null
           transaction_id?: string | null
         }
         Update: {
@@ -211,6 +225,7 @@ export type Database = {
           payment_mode?: string
           proof_image_url?: string | null
           student_id?: string
+          teacher_id?: string | null
           transaction_id?: string | null
         }
         Relationships: [
@@ -231,6 +246,7 @@ export type Database = {
           id: string
           notes: string | null
           start_time: string
+          teacher_id: string | null
         }
         Insert: {
           created_at?: string
@@ -239,6 +255,7 @@ export type Database = {
           id?: string
           notes?: string | null
           start_time: string
+          teacher_id?: string | null
         }
         Update: {
           created_at?: string
@@ -247,57 +264,52 @@ export type Database = {
           id?: string
           notes?: string | null
           start_time?: string
+          teacher_id?: string | null
         }
         Relationships: []
       }
       students: {
         Row: {
-          auth_user_id: string | null
           class: string
           contact_number: string
           created_at: string
           id: string
           joining_date: string
-          login_id: string | null
           monthly_fee: number
           name: string
-          password_hash: string | null
           paused_months: string[] | null
           profile_photo_url: string | null
           remarks: string | null
           subject: string | null
+          teacher_id: string | null
         }
         Insert: {
-          auth_user_id?: string | null
           class: string
           contact_number: string
           created_at?: string
           id?: string
           joining_date: string
-          login_id?: string | null
           monthly_fee: number
           name: string
-          password_hash?: string | null
           paused_months?: string[] | null
           profile_photo_url?: string | null
           remarks?: string | null
           subject?: string | null
+          teacher_id?: string | null
         }
         Update: {
-          auth_user_id?: string | null
           class?: string
           contact_number?: string
           created_at?: string
           id?: string
           joining_date?: string
-          login_id?: string | null
           monthly_fee?: number
           name?: string
-          password_hash?: string | null
           paused_months?: string[] | null
           profile_photo_url?: string | null
           remarks?: string | null
           subject?: string | null
+          teacher_id?: string | null
         }
         Relationships: []
       }
@@ -363,7 +375,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "teacher"
       interest_type: "simple_monthly" | "simple_yearly" | "zero_interest"
     }
     CompositeTypes: {
@@ -492,7 +504,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "teacher"],
       interest_type: ["simple_monthly", "simple_yearly", "zero_interest"],
     },
   },
