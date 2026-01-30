@@ -16,6 +16,7 @@ interface LendingTimelineProps {
   entries: LendingLedgerEntry[];
   onEditEntry?: (entry: LendingLedgerEntry) => void;
   onDeleteEntry?: (entry: LendingLedgerEntry) => void;
+  readOnly?: boolean;
 }
 
 const entryConfig = {
@@ -52,7 +53,8 @@ const entryConfig = {
 export function LendingTimeline({ 
   entries, 
   onEditEntry, 
-  onDeleteEntry 
+  onDeleteEntry,
+  readOnly = false
 }: LendingTimelineProps) {
   // Sort entries by date descending
   const sortedEntries = [...entries].sort((a, b) => {
@@ -118,7 +120,7 @@ export function LendingTimeline({
                     {isNegative ? '-' : '+'}{formatRupees(Math.abs(entry.amount))}
                   </span>
                   
-                  {(onEditEntry || onDeleteEntry) && entry.entry_type !== 'PRINCIPAL' && (
+                  {!readOnly && (onEditEntry || onDeleteEntry) && entry.entry_type !== 'PRINCIPAL' && (
                     <div className="flex gap-1">
                       {onEditEntry && (
                         <Button

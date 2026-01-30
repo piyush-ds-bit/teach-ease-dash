@@ -2,38 +2,45 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { BorrowerHeader } from "@/components/lending/BorrowerHeader";
-import { LoanSummaryCard } from "@/components/lending/LoanSummaryCard";
-import { LendingTimeline } from "@/components/lending/LendingTimeline";
-import { AddPaymentDialog } from "@/components/lending/AddPaymentDialog";
+import { BorrowerInfoCard } from "@/components/lending/BorrowerInfoCard";
+import { BorrowerLifetimeSummary } from "@/components/lending/BorrowerLifetimeSummary";
+import { LoansTable } from "@/components/lending/LoansTable";
+import { LoanDetailSheet } from "@/components/lending/LoanDetailSheet";
+import { AddLoanDialog } from "@/components/lending/AddLoanDialog";
 import { EditBorrowerDialog } from "@/components/lending/EditBorrowerDialog";
 import { DeleteBorrowerDialog } from "@/components/lending/DeleteBorrowerDialog";
-import { EditPaymentDialog } from "@/components/lending/EditPaymentDialog";
-import { DeletePaymentDialog } from "@/components/lending/DeletePaymentDialog";
+import { useLoans } from "@/hooks/useLoans";
 import { useLendingLedger } from "@/hooks/useLendingLedger";
-import { Borrower, calculateBorrowerSummary, isLoanCleared, LendingLedgerEntry, formatInterestType } from "@/lib/lendingCalculation";
-import { Loader2, Calendar } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { 
+  BorrowerPerson, 
+  Loan,
+  calculateBorrowerLifetimeSummary,
+} from "@/lib/lendingCalculation";
+import { Loader2 } from "lucide-react";
 
 export default function BorrowerProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [borrower, setBorrower] = useState<Borrower | null>(null);
+  const [borrower, setBorrower] = useState<BorrowerPerson | null>(null);
   const [loading, setLoading] = useState(true);
-  const { entries, refresh } = useLendingLedger(id);
+  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+
+  // Fetch loans for this borrower
+  const { loans, loading: loansLoading, refresh: refreshLoans } = useLoans(id);
+  
+  // Fetch ALL ledger entries for this borrower (across all loans)
+  const { entries, refresh: refreshEntries } = useLendingLedger(id);
 
   // Dialog states
   const [editBorrowerOpen, setEditBorrowerOpen] = useState(false);
   const [deleteBorrowerOpen, setDeleteBorrowerOpen] = useState(false);
-  const [editEntry, setEditEntry] = useState<LendingLedgerEntry | null>(null);
-  const [deleteEntry, setDeleteEntry] = useState<LendingLedgerEntry | null>(null);
 
   const loadBorrower = async () => {
     if (!id) return;
     
     const { data, error } = await supabase
       .from('borrowers')
-      .select('*')
+      .select('id, name, profile_photo_url, contact_number, notes, created_at, merged_into_borrower_id')
       .eq('id', id)
       .single();
 
@@ -42,13 +49,18 @@ export default function BorrowerProfile() {
       return;
     }
 
-    setBorrower(data as Borrower);
+    setBorrower(data as BorrowerPerson);
     setLoading(false);
   };
 
   useEffect(() => {
     loadBorrower();
   }, [id]);
+
+  const handleRefresh = () => {
+    refreshLoans();
+    refreshEntries();
+  };
 
   if (loading || !borrower) {
     return (
@@ -61,56 +73,48 @@ export default function BorrowerProfile() {
     );
   }
 
-  const summary = calculateBorrowerSummary(borrower, entries);
-  const cleared = isLoanCleared(summary);
+  // Calculate lifetime summary across all loans
+  const lifetimeSummary = calculateBorrowerLifetimeSummary(loans, entries);
 
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <BorrowerHeader
+        {/* Person Header */}
+        <BorrowerInfoCard
           borrower={borrower}
-          isCleared={cleared}
           onEdit={() => setEditBorrowerOpen(true)}
           onDelete={() => setDeleteBorrowerOpen(true)}
         />
 
-        {/* Loan Details Section */}
-        <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            <span>Loan Start Date:</span>
-            <span className="font-medium text-foreground">{format(parseISO(borrower.loan_start_date), 'dd MMM yyyy')}</span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            <span>Today's Date:</span>
-            <span className="font-medium text-foreground">{format(new Date(), 'dd MMM yyyy')}</span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span>Interest Type:</span>
-            <span className="font-medium text-foreground">{formatInterestType(borrower.interest_type, borrower.interest_rate)}</span>
-          </div>
-        </div>
+        {/* Lifetime Summary Cards */}
+        <BorrowerLifetimeSummary summary={lifetimeSummary} />
 
-        <LoanSummaryCard
-          principal={summary.principal}
-          interestAccrued={summary.interestAccrued}
-          totalPaid={summary.totalPaid}
-          remainingBalance={summary.remainingBalance}
-        />
-
-        <div className="flex justify-end">
-          <AddPaymentDialog borrowerId={borrower.id} onPaymentAdded={refresh} />
-        </div>
-
-        <LendingTimeline
+        {/* Loans Table */}
+        <LoansTable
+          loans={loans}
           entries={entries}
-          onEditEntry={(entry) => setEditEntry(entry)}
-          onDeleteEntry={(entry) => setDeleteEntry(entry)}
+          loading={loansLoading}
+          onViewLoan={(loan) => setSelectedLoan(loan)}
+          addLoanButton={
+            <AddLoanDialog
+              borrowerId={borrower.id}
+              borrowerName={borrower.name}
+              onLoanAdded={handleRefresh}
+            />
+          }
         />
 
-        {/* Dialogs */}
+        {/* Loan Detail Sheet */}
+        <LoanDetailSheet
+          loan={selectedLoan}
+          entries={entries}
+          open={!!selectedLoan}
+          onOpenChange={(open) => !open && setSelectedLoan(null)}
+          onRefresh={handleRefresh}
+        />
+
+        {/* Edit/Delete Borrower Dialogs */}
         <EditBorrowerDialog
           borrower={borrower}
           open={editBorrowerOpen}
@@ -122,20 +126,6 @@ export default function BorrowerProfile() {
           open={deleteBorrowerOpen}
           onOpenChange={setDeleteBorrowerOpen}
           onBorrowerDeleted={() => navigate('/lending')}
-        />
-        <EditPaymentDialog
-          entry={editEntry}
-          borrowerId={borrower.id}
-          open={!!editEntry}
-          onOpenChange={(open) => !open && setEditEntry(null)}
-          onPaymentUpdated={refresh}
-        />
-        <DeletePaymentDialog
-          entry={deleteEntry}
-          borrowerId={borrower.id}
-          open={!!deleteEntry}
-          onOpenChange={(open) => !open && setDeleteEntry(null)}
-          onPaymentDeleted={refresh}
         />
       </main>
     </div>

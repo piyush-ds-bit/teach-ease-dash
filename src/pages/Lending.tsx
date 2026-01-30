@@ -2,33 +2,52 @@ import { useState, useEffect } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { BorrowersTable } from "@/components/lending/BorrowersTable";
 import { Card, CardContent } from "@/components/ui/card";
-import { Wallet, ArrowDownLeft } from "lucide-react";
+import { Wallet, ArrowDownLeft, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatRupees, LendingLedgerEntry } from "@/lib/lendingCalculation";
+import { formatRupees, Loan, LendingLedgerEntry, calculateLoanSummary } from "@/lib/lendingCalculation";
 
 export default function Lending() {
-  const [totalLended, setTotalLended] = useState(0);
+  const [totalLent, setTotalLent] = useState(0);
   const [totalRecovered, setTotalRecovered] = useState(0);
+  const [totalOutstanding, setTotalOutstanding] = useState(0);
 
   useEffect(() => {
     const loadSummary = async () => {
-      // Get sum of all principal amounts from borrowers
-      const { data: borrowers } = await supabase
-        .from('borrowers')
-        .select('principal_amount');
+      // Get all active loans with their principals
+      const { data: loansRaw } = await supabase
+        .from('loans')
+        .select('*');
       
-      const lended = (borrowers || []).reduce((sum, b) => sum + Number(b.principal_amount), 0);
-      setTotalLended(lended);
-
-      // Get sum of all payments from ledger
-      const { data: ledger } = await supabase
+      const loans = (loansRaw || []) as Loan[];
+      
+      // Get all ledger entries
+      const { data: entriesRaw } = await supabase
         .from('lending_ledger')
-        .select('amount, entry_type');
+        .select('*');
       
-      const recovered = ((ledger || []) as LendingLedgerEntry[])
-        .filter(e => e.entry_type === 'PAYMENT')
-        .reduce((sum, e) => sum + Math.abs(Number(e.amount)), 0);
+      const entries = (entriesRaw || []) as LendingLedgerEntry[];
+
+      // Calculate totals
+      let lent = 0;
+      let recovered = 0;
+      let outstanding = 0;
+
+      for (const loan of loans) {
+        lent += loan.principal_amount;
+        
+        const loanEntries = entries.filter(e => e.loan_id === loan.id);
+        const summary = calculateLoanSummary(loan, loanEntries);
+        
+        recovered += summary.totalPaid;
+        
+        if (loan.status === 'active') {
+          outstanding += summary.remainingBalance;
+        }
+      }
+
+      setTotalLent(lent);
       setTotalRecovered(recovered);
+      setTotalOutstanding(outstanding);
     };
 
     loadSummary();
@@ -36,7 +55,7 @@ export default function Lending() {
     // Real-time updates
     const channel = supabase
       .channel('lending_summary')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'borrowers' }, loadSummary)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, loadSummary)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lending_ledger' }, loadSummary)
       .subscribe();
 
@@ -55,15 +74,15 @@ export default function Lending() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <Card>
             <CardContent className="flex items-center gap-4 p-4">
-              <div className="p-3 rounded-full bg-blue-500/10">
-                <Wallet className="h-5 w-5 text-blue-600" />
+              <div className="p-3 rounded-full bg-primary/10">
+                <Wallet className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Lended</p>
-                <p className="text-xl font-bold">{formatRupees(totalLended)}</p>
+                <p className="text-sm text-muted-foreground">Total Lent</p>
+                <p className="text-xl font-bold">{formatRupees(totalLent)}</p>
               </div>
             </CardContent>
           </Card>
@@ -75,6 +94,19 @@ export default function Lending() {
               <div>
                 <p className="text-sm text-muted-foreground">Total Recovered</p>
                 <p className="text-xl font-bold">{formatRupees(totalRecovered)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="p-3 rounded-full bg-amber-500/10">
+                <TrendingUp className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Outstanding</p>
+                <p className={`text-xl font-bold ${totalOutstanding > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  {formatRupees(totalOutstanding)}
+                </p>
               </div>
             </CardContent>
           </Card>

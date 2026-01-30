@@ -1,20 +1,17 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Pencil, Trash2, Phone, Calendar, FileText } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Phone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Borrower, formatInterestType, formatRupees } from "@/lib/lendingCalculation";
-import { LendingStatusBadge } from "./LendingStatusBadge";
-import { format, parseISO } from "date-fns";
+import { BorrowerPerson } from "@/lib/lendingCalculation";
 
-interface BorrowerHeaderProps {
-  borrower: Borrower;
-  isCleared: boolean;
+interface BorrowerInfoCardProps {
+  borrower: BorrowerPerson;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export function BorrowerHeader({ borrower, isCleared, onEdit, onDelete }: BorrowerHeaderProps) {
+export function BorrowerInfoCard({ borrower, onEdit, onDelete }: BorrowerInfoCardProps) {
   const navigate = useNavigate();
 
   return (
@@ -41,9 +38,12 @@ export function BorrowerHeader({ borrower, isCleared, onEdit, onDelete }: Borrow
             <div className="flex items-start justify-between gap-2 flex-wrap">
               <div>
                 <h1 className="text-2xl font-bold">{borrower.name}</h1>
-                <div className="flex items-center gap-2 mt-1">
-                  <LendingStatusBadge isCleared={isCleared} />
-                </div>
+                {borrower.contact_number && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                    <Phone className="h-4 w-4" />
+                    <span>{borrower.contact_number}</span>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={onEdit}>
@@ -54,28 +54,6 @@ export function BorrowerHeader({ borrower, isCleared, onEdit, onDelete }: Borrow
                   <Trash2 className="h-4 w-4 mr-1" />
                   Delete
                 </Button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-              {borrower.contact_number && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Phone className="h-4 w-4" />
-                  <span>{borrower.contact_number}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>Loan Start: {format(parseISO(borrower.loan_start_date), 'dd MMM yyyy')}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <FileText className="h-4 w-4" />
-                <span>Principal: {formatRupees(borrower.principal_amount)}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="font-medium">
-                  {formatInterestType(borrower.interest_type, borrower.interest_rate)}
-                </span>
               </div>
             </div>
 
