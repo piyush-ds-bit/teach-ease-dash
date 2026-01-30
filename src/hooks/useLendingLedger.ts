@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { LendingLedgerEntry, LedgerEntryType } from '@/lib/lendingCalculation';
 
-export function useLendingLedger(borrowerId: string | undefined) {
+/**
+ * Hook to fetch lending ledger entries
+ * Can be scoped by borrowerId only OR by both borrowerId and loanId
+ */
+export function useLendingLedger(borrowerId: string | undefined, loanId?: string) {
   const [entries, setEntries] = useState<LendingLedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -16,12 +20,20 @@ export function useLendingLedger(borrowerId: string | undefined) {
 
     try {
       setLoading(true);
-      const { data, error: fetchError } = await supabase
+      
+      let query = supabase
         .from('lending_ledger')
         .select('*')
         .eq('borrower_id', borrowerId)
         .order('entry_date', { ascending: true })
         .order('created_at', { ascending: true });
+      
+      // If loanId is provided, filter by it
+      if (loanId) {
+        query = query.eq('loan_id', loanId);
+      }
+
+      const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
 
@@ -33,7 +45,7 @@ export function useLendingLedger(borrowerId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [borrowerId]);
+  }, [borrowerId, loanId]);
 
   useEffect(() => {
     loadEntries();

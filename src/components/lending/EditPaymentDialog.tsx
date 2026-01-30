@@ -6,11 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { LendingLedgerEntry } from "@/lib/lendingCalculation";
-import { useLendingLedger } from "@/hooks/useLendingLedger";
+import { supabase } from "@/integrations/supabase/client";
 
 interface EditPaymentDialogProps {
   entry: LendingLedgerEntry | null;
   borrowerId: string;
+  loanId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPaymentUpdated?: () => void;
@@ -19,12 +20,12 @@ interface EditPaymentDialogProps {
 export function EditPaymentDialog({ 
   entry, 
   borrowerId,
+  loanId,
   open, 
   onOpenChange, 
   onPaymentUpdated 
 }: EditPaymentDialogProps) {
   const { toast } = useToast();
-  const { updateEntry } = useLendingLedger(borrowerId);
   const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -62,11 +63,14 @@ export function EditPaymentDialog({
         ? -Math.abs(parseFloat(formData.amount))
         : parseFloat(formData.amount);
 
-      const { error } = await updateEntry(entry.id, {
-        amount,
-        entry_date: formData.entry_date,
-        description: formData.description.trim() || null,
-      });
+      const { error } = await supabase
+        .from('lending_ledger')
+        .update({
+          amount,
+          entry_date: formData.entry_date,
+          description: formData.description.trim() || null,
+        })
+        .eq('id', entry.id);
 
       if (error) throw error;
 

@@ -2,10 +2,10 @@ import { useState } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Borrower } from "@/lib/lendingCalculation";
+import { BorrowerPerson } from "@/lib/lendingCalculation";
 
 interface DeleteBorrowerDialogProps {
-  borrower: Borrower | null;
+  borrower: BorrowerPerson | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBorrowerDeleted: () => void;
@@ -58,7 +58,7 @@ export function DeleteBorrowerDialog({
           <AlertDialogTitle>Delete Borrower</AlertDialogTitle>
           <AlertDialogDescription>
             Are you sure you want to delete <strong>{borrower?.name}</strong>? 
-            This will also delete all their payment history and cannot be undone.
+            This will also delete all their loans and payment history. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

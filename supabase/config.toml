@@ -1,1 +1,4 @@
 project_id = "pllnboggbgghjyunmwdp"
+
+[functions.lending-link-legacy]
+verify_jwt = false

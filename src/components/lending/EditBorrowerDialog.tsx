@@ -4,15 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, X } from "lucide-react";
-import { Borrower, InterestType } from "@/lib/lendingCalculation";
+import { BorrowerPerson } from "@/lib/lendingCalculation";
 
 interface EditBorrowerDialogProps {
-  borrower: Borrower | null;
+  borrower: BorrowerPerson | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBorrowerUpdated: () => void;
@@ -33,9 +32,6 @@ export function EditBorrowerDialog({
   const [formData, setFormData] = useState({
     name: "",
     contact_number: "",
-    interest_type: "zero_interest" as InterestType,
-    interest_rate: "",
-    duration_months: "",
     notes: "",
   });
 
@@ -44,9 +40,6 @@ export function EditBorrowerDialog({
       setFormData({
         name: borrower.name,
         contact_number: borrower.contact_number || "",
-        interest_type: borrower.interest_type,
-        interest_rate: borrower.interest_rate?.toString() || "",
-        duration_months: borrower.duration_months?.toString() || "",
         notes: borrower.notes || "",
       });
       setImagePreview(borrower.profile_photo_url || null);
@@ -101,14 +94,12 @@ export function EditBorrowerDialog({
           .upload(filePath, selectedImage, { upsert: true });
 
         if (!uploadError) {
-          // Use signed URL for private bucket (1 year expiry)
           const { data: signedUrlData } = await supabase.storage
             .from('borrower-photos')
             .createSignedUrl(filePath, 31536000);
           photoUrl = signedUrlData?.signedUrl || null;
         }
       } else if (imagePreview === null && borrower.profile_photo_url) {
-        // Photo was cleared
         photoUrl = null;
       }
 
@@ -117,9 +108,6 @@ export function EditBorrowerDialog({
         .update({
           name: formData.name.trim(),
           contact_number: formData.contact_number.trim() || null,
-          interest_type: formData.interest_type,
-          interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : 0,
-          duration_months: formData.duration_months ? parseInt(formData.duration_months) : null,
           notes: formData.notes.trim() || null,
           profile_photo_url: photoUrl,
         })
@@ -211,50 +199,6 @@ export function EditBorrowerDialog({
               value={formData.contact_number}
               onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
               placeholder="Enter contact number"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="edit-interest_type">Interest Type</Label>
-            <Select
-              value={formData.interest_type}
-              onValueChange={(value: InterestType) => setFormData({ ...formData, interest_type: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select interest type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="zero_interest">Zero Interest</SelectItem>
-                <SelectItem value="simple_monthly">Simple Interest (Monthly)</SelectItem>
-                <SelectItem value="simple_yearly">Simple Interest (Yearly)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {formData.interest_type !== 'zero_interest' && (
-            <div className="space-y-2">
-              <Label htmlFor="edit-rate">Interest Rate (% per annum)</Label>
-              <Input
-                id="edit-rate"
-                type="number"
-                min="0"
-                step="0.1"
-                value={formData.interest_rate}
-                onChange={(e) => setFormData({ ...formData, interest_rate: e.target.value })}
-                placeholder="Enter annual rate"
-              />
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="edit-duration">Expected Duration (months)</Label>
-            <Input
-              id="edit-duration"
-              type="number"
-              min="1"
-              value={formData.duration_months}
-              onChange={(e) => setFormData({ ...formData, duration_months: e.target.value })}
-              placeholder="Optional"
             />
           </div>
 

@@ -6,16 +6,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
-import { useLendingLedger } from "@/hooks/useLendingLedger";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AddPaymentDialogProps {
   borrowerId: string;
+  loanId?: string;
   onPaymentAdded?: () => void;
 }
 
-export function AddPaymentDialog({ borrowerId, onPaymentAdded }: AddPaymentDialogProps) {
+export function AddPaymentDialog({ borrowerId, loanId, onPaymentAdded }: AddPaymentDialogProps) {
   const { toast } = useToast();
-  const { addEntry } = useLendingLedger(borrowerId);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -40,12 +40,20 @@ export function AddPaymentDialog({ borrowerId, onPaymentAdded }: AddPaymentDialo
     setLoading(true);
 
     try {
-      const { error } = await addEntry(
-        'PAYMENT',
-        -Math.abs(parseFloat(formData.amount)), // Store as negative
-        formData.payment_date,
-        formData.description.trim() || 'Payment received'
-      );
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('lending_ledger')
+        .insert({
+          borrower_id: borrowerId,
+          loan_id: loanId || null,
+          entry_type: 'PAYMENT',
+          amount: -Math.abs(parseFloat(formData.amount)), // Store as negative
+          entry_date: formData.payment_date,
+          description: formData.description.trim() || 'Payment received',
+          teacher_id: user.id,
+        });
 
       if (error) throw error;
 
