@@ -34,12 +34,17 @@ export const AddHomeworkDialog = ({ studentId, onHomeworkAdded }: AddHomeworkDia
     setLoading(true);
 
     try {
+      // Get current user for teacher_id
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       const { error } = await supabase.from("homework").insert({
         student_id: studentId,
         title: formData.title,
         description: formData.description,
         due_date: formData.due_date,
         completed: false,
+        teacher_id: user.id,
       });
 
       if (error) throw error;

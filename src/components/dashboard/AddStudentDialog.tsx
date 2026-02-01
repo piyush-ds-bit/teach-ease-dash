@@ -82,6 +82,10 @@ export const AddStudentDialog = () => {
         throw new Error(errors);
       }
 
+      // Get current user for teacher_id
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       // Upload photo if selected
       let photoUrl = null;
       if (photoFile) {
@@ -102,7 +106,7 @@ export const AddStudentDialog = () => {
         photoUrl = signedUrlData?.signedUrl || null;
       }
 
-      // First create the student record without password hash
+      // First create the student record with teacher_id
       const { data: newStudent, error } = await supabase.from("students").insert({
         name: validationResult.data.name,
         class: validationResult.data.class,
@@ -112,6 +116,7 @@ export const AddStudentDialog = () => {
         subject: formData.subject || null,
         remarks: validationResult.data.remarks || null,
         profile_photo_url: photoUrl,
+        teacher_id: user.id,
       }).select().single();
 
       if (error) throw error;

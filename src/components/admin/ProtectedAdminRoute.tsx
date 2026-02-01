@@ -12,7 +12,7 @@ export const ProtectedAdminRoute = ({ children }: ProtectedAdminRouteProps) => {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const checkAdminAuth = async () => {
+    const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
@@ -22,30 +22,42 @@ export const ProtectedAdminRoute = ({ children }: ProtectedAdminRouteProps) => {
           return;
         }
 
-        // Check if user has admin role using the has_role RPC function
-        const { data: hasRole, error } = await supabase.rpc('has_role', {
+        // Check if user has teacher, admin, or super_admin role
+        const { data: hasTeacherRole } = await supabase.rpc('has_role', {
+          _user_id: session.user.id,
+          _role: 'teacher'
+        });
+
+        const { data: hasAdminRole } = await supabase.rpc('has_role', {
           _user_id: session.user.id,
           _role: 'admin'
         });
 
-        if (error) {
-          console.error("Error checking admin role:", error);
+        const { data: hasSuperAdminRole } = await supabase.rpc('has_role', {
+          _user_id: session.user.id,
+          _role: 'super_admin'
+        });
+
+        if (!hasTeacherRole && !hasAdminRole && !hasSuperAdminRole) {
           setIsAuthorized(false);
           navigate("/auth");
           return;
         }
 
-        if (!hasRole) {
-          // User is authenticated but not an admin
-          // Check if they might be a student
-          const studentInfo = localStorage.getItem('student_session');
-          if (studentInfo) {
-            navigate("/student-dashboard");
-          } else {
+        // Check if teacher is suspended (not applicable for super_admin)
+        if ((hasTeacherRole || hasAdminRole) && !hasSuperAdminRole) {
+          const { data: teacher } = await supabase
+            .from('teachers')
+            .select('status')
+            .eq('user_id', session.user.id)
+            .single();
+
+          if (teacher?.status === 'suspended') {
+            await supabase.auth.signOut();
+            setIsAuthorized(false);
             navigate("/auth");
+            return;
           }
-          setIsAuthorized(false);
-          return;
         }
 
         setIsAuthorized(true);
@@ -56,7 +68,7 @@ export const ProtectedAdminRoute = ({ children }: ProtectedAdminRouteProps) => {
       }
     };
 
-    checkAdminAuth();
+    checkAuth();
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -64,8 +76,7 @@ export const ProtectedAdminRoute = ({ children }: ProtectedAdminRouteProps) => {
         setIsAuthorized(false);
         navigate("/auth");
       } else if (event === "SIGNED_IN") {
-        // Re-check admin status on sign in
-        checkAdminAuth();
+        checkAuth();
       }
     });
 

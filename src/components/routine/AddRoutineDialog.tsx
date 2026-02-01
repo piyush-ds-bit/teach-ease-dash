@@ -78,11 +78,24 @@ export const AddRoutineDialog = ({ open, onOpenChange, onSuccess }: AddRoutineDi
 
     setLoading(true);
 
+    // Get current user for teacher_id
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Not authenticated",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.from("routines").insert({
       day_of_week: formData.day_of_week,
       start_time: formData.start_time,
       end_time: formData.end_time,
       notes: formData.notes || null,
+      teacher_id: user.id,
     });
 
     if (error) {
