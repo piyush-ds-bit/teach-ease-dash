@@ -1,247 +1,232 @@
 
-# Borrower → Multiple Loans Refactor
+# Teacher-Only Platform Implementation Plan
 
 ## Overview
-This plan transforms the lending system from treating each borrower as a single loan into a proper **Borrower (person) → Multiple Loans** architecture. The database schema is already in place (`loans` table + `loan_id` in `lending_ledger`), so this focuses on UI/UX changes and data linking.
+Transform the app into a teacher-only platform where:
+- You (piyushbusiness@example.com) are the only Super Admin
+- Teachers can only be created via invite by the Super Admin
+- Each teacher sees only their own data
+- No student login functionality
 
-## Current State Analysis
-- **Database**: `loans` table exists, `lending_ledger` has `loan_id` column
-- **Legacy Data Issues**:
-  - Most ledger entries have `loan_id = null`
-  - Duplicate borrowers exist (e.g., "ShreeOm Tiwari" appears twice with same phone)
-  - `borrowers` table still has loan-specific fields (`principal_amount`, `interest_type`, etc.)
-- **UI**: Treats each borrower row as a loan (shows loan details directly on borrower)
+## Current State (Already Done)
+Based on the existing codebase and memories:
+- `super_admin` role exists in database
+- `teachers` table with status (active/suspended) exists
+- All data tables have `teacher_id` column
+- RLS policies enforce `teacher_id = auth.uid()` isolation
+- Student login pages already removed
 
----
+## Phase 1: Cleanup Legacy Student Auth Code
 
-## Phase 1: Data Layer Updates
+### 1.1 Delete student-auth Edge Function
+Remove `supabase/functions/student-auth/` entirely - no longer needed.
 
-### 1.1 Update Type Definitions
-Create a new `Loan` interface and update `Borrower` to be person-only:
-
-```text
-src/lib/lendingCalculation.ts
-├── Loan interface (id, borrower_id, principal_amount, interest_type, interest_rate, start_date, status, settled_at)
-├── BorrowerPerson interface (id, name, profile_photo_url, contact_number, notes, created_at)
-├── Update calculateLoanSummary() to work with Loan + entries
-├── Add calculateBorrowerLifetimeSummary() for aggregated stats
-```
-
-### 1.2 New Hook: useLoans
-Create `src/hooks/useLoans.ts`:
-- Fetch loans for a borrower
-- Add new loan (with auto-settle previous if active exists)
-- Update loan
-- Settle loan manually
-- Real-time subscription
-
-### 1.3 Update useLendingLedger
-Modify to scope entries by `loan_id` instead of just `borrower_id`:
-- `useLendingLedger(loanId)` - entries for specific loan
-- Add `loan_id` when creating entries
-
----
-
-## Phase 2: Borrowers List Page (`/lending`)
-
-### 2.1 Update BorrowersTable Component
-**Before**: Shows loan details per row (principal, interest, balance)
-**After**: Shows borrower identity + active loan status
-
-| Column | Description |
-|--------|-------------|
-| Photo + Name | Borrower identity |
-| Phone | Contact number |
-| Active Loan | Principal of active loan (or "No active loan") |
-| Total Outstanding | Sum of all active loan balances |
-| Status | "Active Loan" / "No Active Loan" badge |
-| Action | View button |
-
-### 2.2 Update AddBorrowerDialog → Split into Two Flows
-**New Add Borrower** (person only):
-- Name, Phone, Photo, Notes
-- No loan fields
-
-**New Add Loan** (separate dialog):
-- Select existing borrower OR create new
-- Principal, Interest type, Rate, Start date
-
----
-
-## Phase 3: Borrower Profile Page (`/borrower/:id`)
-
-### 3.1 Restructure Page Layout
+### 1.2 Update ProtectedAdminRoute
+Remove the student session localStorage check (lines 40-44) and update to check for `teacher` OR `admin` OR `super_admin` roles.
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│ BORROWER HEADER (Person Info)                               │
-│ ┌────────┐  Name: Subhadeep              [Edit] [Delete]    │
-│ │ Avatar │  Phone: 9876543210                               │
-│ └────────┘  Notes: Friend from college                      │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│ LIFETIME SUMMARY CARDS                                      │
-│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐          │
-│ │ Total Lent   │ │ Total Paid   │ │ Outstanding  │          │
-│ │ ₹50,000      │ │ ₹35,000      │ │ ₹15,000      │          │
-│ └──────────────┘ └──────────────┘ └──────────────┘          │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│ LOANS SECTION                                [+ Add Loan]   │
-│ ┌───────────────────────────────────────────────────────┐   │
-│ │ Loan #1  │ ₹30,000 │ 2% monthly │ Active │ ₹15,000 due│   │
-│ │          │         │            │        │   [View]   │   │
-│ ├───────────────────────────────────────────────────────┤   │
-│ │ Loan #2  │ ₹20,000 │ 0%         │ Settled│ ₹0 due     │   │
-│ │          │         │            │        │   [View]   │   │
-│ └───────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+Changes to src/components/admin/ProtectedAdminRoute.tsx:
+- Remove localStorage student_session check
+- Update role check to include: teacher, admin, super_admin
 ```
-
-### 3.2 New Components
-
-| Component | Purpose |
-|-----------|---------|
-| `BorrowerInfoCard` | Person-only header (photo, name, phone, notes) |
-| `BorrowerLifetimeSummary` | Aggregated cards (total lent, paid, outstanding) |
-| `LoansTable` | List of all loans with status, due amount |
-| `AddLoanDialog` | Create new loan for this borrower |
-| `LoanDetailSheet` | Sheet/dialog showing loan details + timeline |
 
 ---
 
-## Phase 4: Loan Detail Sheet (Dialog/Sheet)
+## Phase 2: Create Teacher Management Infrastructure
 
-### 4.1 LoanDetailSheet Component
-Opens when clicking "View" on a loan:
+### 2.1 New Edge Function: teacher-management
+Create `supabase/functions/teacher-management/index.ts` to handle:
+- **Create teacher**: Uses Supabase Admin API to create auth user
+- **Generate invite link**: Creates password reset link for first-time login
+- **Update status**: Pause/resume teacher accounts
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│ LOAN DETAILS                                    [X Close]   │
-│─────────────────────────────────────────────────────────────│
-│ Principal: ₹30,000          Start Date: 14 Jul 2024        │
-│ Interest: 2% / month        Status: ACTIVE                 │
-│─────────────────────────────────────────────────────────────│
-│ LOAN SUMMARY CARDS                                          │
-│ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐            │
-│ │Principal│ │Interest │ │  Paid   │ │Remaining│            │
-│ │₹30,000  │ │₹10,800  │ │₹25,800  │ │₹15,000  │            │
-│ └─────────┘ └─────────┘ └─────────┘ └─────────┘            │
-│─────────────────────────────────────────────────────────────│
-│                                        [+ Add Payment]      │
-│ PAYMENT TIMELINE (scoped to this loan)                      │
-│ ┌───────────────────────────────────────────────────────┐   │
-│ │ 20 Jan 2026 │ PRINCIPAL │ +₹30,000                    │   │
-│ │ 09 Jan 2026 │ PAYMENT   │ -₹5,000    [Edit] [Delete]  │   │
-│ └───────────────────────────────────────────────────────┘   │
-│─────────────────────────────────────────────────────────────│
-│ [Settle Loan]  (only if balance ≤ 0 or manual settle)       │
-└─────────────────────────────────────────────────────────────┘
+Endpoints:
+POST /create - Create new teacher (super_admin only)
+  - Creates Supabase Auth user
+  - Inserts into teachers table
+  - Assigns 'teacher' role in user_roles
+  - Returns invite link
+
+POST /update-status - Pause/resume teacher (super_admin only)
+  - Updates teachers.status
+  - If paused: marks auth user as banned
+
+POST /resend-invite - Regenerate invite link (super_admin only)
 ```
 
-### 4.2 Business Rules in LoanDetailSheet
-- **Settled loans**: Read-only, no Add Payment, no Edit/Delete
-- **Auto-settle**: When balance ≤ 0, prompt to settle or leave open
-- **Settle Loan button**: Creates ADJUSTMENT entry if needed, marks `settled_at`
+### 2.2 Update supabase/config.toml
+Add teacher-management function with `verify_jwt = false` (we validate in code).
 
 ---
 
-## Phase 5: Add Loan Flow
+## Phase 3: Protected Routes for Super Admin
 
-### 5.1 From Borrower Profile
-- "Add Loan" button opens `AddLoanDialog`
-- If active loan exists → auto-settle it first (with confirmation)
-- Create new loan in `loans` table
-- Create PRINCIPAL entry in `lending_ledger` with `loan_id`
+### 3.1 Create ProtectedSuperAdminRoute Component
+`src/components/admin/ProtectedSuperAdminRoute.tsx`
+- Check for `super_admin` role
+- Redirect to dashboard if not super admin
 
-### 5.2 From Lending Dashboard
-- "Add Loan" button opens two-step dialog:
-  - Step 1: Select existing borrower (searchable) or "Create New Borrower"
-  - Step 2: Enter loan details
+### 3.2 Add Super Admin Routes to App.tsx
+```text
+/super-admin/teachers → Teacher management page
+```
 
 ---
 
-## Phase 6: Legacy Data Migration Utility
+## Phase 4: Teacher Management UI (Super Admin Only)
 
-### 6.1 Link Orphaned Ledger Entries
-Create an Edge Function `lending-link-legacy`:
-- Find ledger entries where `loan_id IS NULL`
-- Match to loans by `borrower_id` and date logic
-- Update `loan_id` for each entry
+### 4.1 Teacher Management Page
+`src/pages/TeacherManagement.tsx`
 
-### 6.2 Create Missing Loans
-For borrowers without loans in `loans` table:
-- Create a loan from borrower's legacy fields (`principal_amount`, etc.)
-- Link existing ledger entries to this loan
+Layout:
+```text
++--------------------------------------------------+
+| TeachEase - Teacher Management                   |
++--------------------------------------------------+
+| [+ Add Teacher]                                  |
++--------------------------------------------------+
+| Teachers List                                    |
+| +----------------------------------------------+ |
+| | Name     | Email    | Status | Actions      | |
+| |----------|----------|--------|--------------||| |
+| | John Doe | j@ex.com | Active | Pause | Link | |
+| | Jane Doe | ja@ex.com| Paused | Resume| Link | |
+| +----------------------------------------------+ |
++--------------------------------------------------+
+```
 
-### 6.3 Merge Duplicate Borrowers (Optional UI)
-For super_admin only:
-- Show suggested merges (same phone/name)
-- Preview before merge
-- Keep original records, just set `merged_into_borrower_id`
+### 4.2 AddTeacherDialog Component
+`src/components/teachers/AddTeacherDialog.tsx`
+- Full Name (required)
+- Email (required)
+- Phone (optional)
+- Initial status: Active
+
+On submit:
+1. Call teacher-management edge function
+2. Show invite link in success dialog with copy button
+
+### 4.3 TeachersTable Component
+`src/components/teachers/TeachersTable.tsx`
+- List all teachers
+- Show status badge (Active/Suspended)
+- Actions: Pause/Resume, Copy Invite Link
+
+### 4.4 Super Admin FAB (Floating Action Button)
+`src/components/admin/SuperAdminFAB.tsx`
+- Shows only for super_admin role
+- Fixed bottom-left position
+- Links to /super-admin/teachers
+
+---
+
+## Phase 5: Update Auth Flow
+
+### 5.1 Update Auth Page Login
+`src/pages/Auth.tsx`
+- After login, check if teacher is suspended
+- If suspended: sign out and show "Account paused" message
+- No sign-up button (invite-only)
+
+### 5.2 Update ProtectedAdminRoute
+After auth check, also verify teacher is not suspended by checking `teachers` table.
+
+---
+
+## Phase 6: Add teacher_id to All Data Operations
+
+### 6.1 Update Insert Operations
+All insert operations must include `teacher_id: user.id`
+
+Files to update:
+| File | Function/Component |
+|------|-------------------|
+| `src/components/dashboard/AddStudentDialog.tsx` | Add teacher_id to insert |
+| `src/components/student/AddPaymentDialog.tsx` | Add teacher_id to insert |
+| `src/components/routine/AddRoutineDialog.tsx` | Add teacher_id to insert |
+| `src/lib/ledgerCalculation.ts` | Add teacher_id to all insert functions |
+| `src/components/homework/AddHomeworkDialog.tsx` | Add teacher_id to insert |
+
+Pattern for each file:
+```typescript
+// Get current user
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) throw new Error('Not authenticated');
+
+// Include teacher_id in insert
+await supabase.from("table_name").insert({
+  ...otherFields,
+  teacher_id: user.id,
+});
+```
+
+### 6.2 Update Edit Operations
+Files like EditStudentDialog, EditPaymentDialog, EditRoutineDialog should NOT change teacher_id on update (it's immutable).
+
+---
+
+## Phase 7: Navigation Updates
+
+### 7.1 Update DashboardHeader
+`src/components/dashboard/DashboardHeader.tsx`
+- Remove any student-related links (already done)
+- Keep: Students, Routine, Lending, Logout
+
+### 7.2 Add Super Admin FAB
+Visible only to super_admin role at bottom-left corner, linking to teacher management.
 
 ---
 
 ## File Changes Summary
 
 ### New Files
-| File | Description |
-|------|-------------|
-| `src/hooks/useLoans.ts` | Hook for loan CRUD + real-time |
-| `src/components/lending/BorrowerInfoCard.tsx` | Person-only header |
-| `src/components/lending/BorrowerLifetimeSummary.tsx` | Aggregated stats |
-| `src/components/lending/LoansTable.tsx` | List of loans per borrower |
-| `src/components/lending/LoanDetailSheet.tsx` | Loan detail in sheet |
-| `src/components/lending/AddLoanDialog.tsx` | Create new loan |
-| `src/components/lending/SettleLoanButton.tsx` | Settle with ADJUSTMENT |
-| `supabase/functions/lending-link-legacy/index.ts` | Link orphaned entries |
+| File | Purpose |
+|------|---------|
+| `supabase/functions/teacher-management/index.ts` | Edge function for teacher CRUD |
+| `src/components/admin/ProtectedSuperAdminRoute.tsx` | Route guard for super admin |
+| `src/components/admin/SuperAdminFAB.tsx` | Floating button for super admin |
+| `src/pages/TeacherManagement.tsx` | Teacher management page |
+| `src/components/teachers/AddTeacherDialog.tsx` | Add teacher dialog |
+| `src/components/teachers/TeachersTable.tsx` | Teachers list table |
+| `src/hooks/useCurrentUserRole.ts` | Hook to check current user's role |
 
 ### Modified Files
 | File | Changes |
 |------|---------|
-| `src/lib/lendingCalculation.ts` | Add Loan type, update calculations |
-| `src/hooks/useLendingLedger.ts` | Scope by loan_id |
-| `src/pages/Lending.tsx` | Update summary cards for new model |
-| `src/pages/BorrowerProfile.tsx` | Complete restructure |
-| `src/components/lending/BorrowersTable.tsx` | Show borrower identity + loan status |
-| `src/components/lending/AddBorrowerDialog.tsx` | Person-only, no loan fields |
-| `src/components/lending/BorrowerHeader.tsx` | Remove loan fields |
-| `src/components/lending/EditBorrowerDialog.tsx` | Person-only edits |
-| `src/components/lending/AddPaymentDialog.tsx` | Require loanId |
-| `src/components/lending/LendingTimeline.tsx` | Scope to loan entries |
+| `src/App.tsx` | Add super admin routes |
+| `src/components/admin/ProtectedAdminRoute.tsx` | Remove student references, add teacher/super_admin checks |
+| `src/pages/Auth.tsx` | Add suspended teacher check |
+| `src/components/dashboard/DashboardHeader.tsx` | Add SuperAdminFAB |
+| `src/components/dashboard/AddStudentDialog.tsx` | Add teacher_id |
+| `src/components/student/AddPaymentDialog.tsx` | Add teacher_id |
+| `src/components/routine/AddRoutineDialog.tsx` | Add teacher_id |
+| `src/lib/ledgerCalculation.ts` | Add teacher_id to all functions |
+| `supabase/config.toml` | Add teacher-management function |
+
+### Deleted Files
+| File | Reason |
+|------|--------|
+| `supabase/functions/student-auth/` | Student auth no longer needed |
 
 ---
 
-## Technical Considerations
+## Security Considerations
 
-### Interest Calculation
-- Interest is calculated per-loan using `Loan.start_date`, `Loan.interest_type`, `Loan.interest_rate`
-- Settled loans: interest frozen at `settled_at` date
-
-### Auto-Settle Previous Loan
-When adding a new loan for a borrower with an active loan:
-1. Calculate remaining balance on active loan
-2. If balance > 0: Create negative ADJUSTMENT entry to zero it
-3. Set `status = 'settled'` and `settled_at = NOW()`
-4. Create new loan
-
-### RLS Considerations
-All queries filter by `teacher_id = auth.uid()`:
-- Loans table already has RLS
-- Ledger entries already have RLS
-- No changes needed to policies
+1. **Role Verification**: All super_admin operations verified server-side in edge function
+2. **teacher_id Isolation**: RLS policies already enforce data isolation
+3. **Invite-Only**: No public signup - teachers created via edge function with admin API
+4. **Suspended Teachers**: Auth check blocks login for paused accounts
+5. **bcrypt**: Edge function uses bcrypt for any password operations (cost factor 12)
 
 ---
 
 ## Testing Checklist
 After implementation:
-- [ ] Borrowers list shows one row per person (no duplicates)
-- [ ] Clicking borrower shows loan history
-- [ ] Can add new loan to existing borrower
-- [ ] Previous active loan auto-settles
-- [ ] Payments apply to specific loan only
-- [ ] Settled loans are read-only
-- [ ] Lifetime summary shows correct totals
-- [ ] Legacy ledger entries still display correctly
+- [ ] Super Admin can create new teachers
+- [ ] Invite link works for first-time teacher login
+- [ ] Teachers see only their own students/data
+- [ ] Paused teachers cannot log in
+- [ ] Super Admin FAB visible only to super_admin
+- [ ] Teacher management page accessible only to super_admin
+- [ ] All insert operations include teacher_id
