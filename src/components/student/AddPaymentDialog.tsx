@@ -96,6 +96,10 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
         throw new Error(errors);
       }
 
+      // Get current user for teacher_id
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       let proofUrl = null;
       if (formData.proof_image) {
         proofUrl = await uploadProof(formData.proof_image);
@@ -109,6 +113,7 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
         payment_mode: validationResult.data.payment_mode,
         transaction_id: validationResult.data.transaction_id,
         proof_image_url: proofUrl,
+        teacher_id: user.id,
       }).select().single();
 
       if (error) throw error;

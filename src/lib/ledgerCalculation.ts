@@ -111,6 +111,9 @@ export const generateFeeEntries = async (
   const newMonths = chargeableMonths.filter(m => !existingMonths.includes(m));
   
   if (newMonths.length === 0) return [];
+
+  // Get current user for teacher_id
+  const { data: { user } } = await supabase.auth.getUser();
   
   const newEntries = newMonths.map(month => ({
     student_id: studentId,
@@ -118,6 +121,7 @@ export const generateFeeEntries = async (
     month_key: month,
     amount: monthlyFee,
     description: `Monthly fee for ${formatMonthKey(month)}`,
+    teacher_id: user?.id || null,
   }));
   
   const { data, error } = await supabase
@@ -143,6 +147,9 @@ export const addPaymentEntry = async (
   paymentId: string,
   description?: string
 ): Promise<LedgerEntry | null> => {
+  // Get current user for teacher_id
+  const { data: { user } } = await supabase.auth.getUser();
+
   const { data, error } = await supabase
     .from('fee_ledger')
     .insert({
@@ -152,6 +159,7 @@ export const addPaymentEntry = async (
       amount: amount,
       description: description || `Payment received for ${formatMonthKey(monthKey)}`,
       metadata: { payment_id: paymentId },
+      teacher_id: user?.id || null,
     })
     .select()
     .single();
@@ -171,6 +179,9 @@ export const addPauseEntry = async (
   studentId: string,
   monthKey: string
 ): Promise<LedgerEntry | null> => {
+  // Get current user for teacher_id
+  const { data: { user } } = await supabase.auth.getUser();
+
   const { data, error } = await supabase
     .from('fee_ledger')
     .insert({
@@ -179,6 +190,7 @@ export const addPauseEntry = async (
       month_key: monthKey,
       amount: 0,
       description: `Fee paused for ${formatMonthKey(monthKey)}`,
+      teacher_id: user?.id || null,
     })
     .select()
     .single();
@@ -271,6 +283,9 @@ export const syncLedgerWithPayments = async (studentId: string): Promise<void> =
   const existingPaymentIds = (existingEntries || [])
     .map(e => (e.metadata as Record<string, unknown>)?.payment_id)
     .filter(Boolean);
+
+  // Get current user for teacher_id
+  const { data: { user } } = await supabase.auth.getUser();
   
   // Add missing payment entries
   const newPaymentEntries = payments
@@ -283,6 +298,7 @@ export const syncLedgerWithPayments = async (studentId: string): Promise<void> =
       description: `Payment received for ${formatMonthKey(p.month)}`,
       metadata: { payment_id: p.id },
       created_at: p.payment_date,
+      teacher_id: user?.id || p.teacher_id || null,
     }));
   
   if (newPaymentEntries.length > 0) {
@@ -307,6 +323,9 @@ export const syncLedgerWithPausedMonths = async (
     .eq('entry_type', 'PAUSE');
   
   const existingPausedMonths = (existingEntries || []).map(e => e.month_key);
+
+  // Get current user for teacher_id
+  const { data: { user } } = await supabase.auth.getUser();
   
   // Add missing pause entries
   const newPauseEntries = pausedMonths
@@ -317,6 +336,7 @@ export const syncLedgerWithPausedMonths = async (
       month_key: m,
       amount: 0,
       description: `Fee paused for ${formatMonthKey(m)}`,
+      teacher_id: user?.id || null,
     }));
   
   if (newPauseEntries.length > 0) {

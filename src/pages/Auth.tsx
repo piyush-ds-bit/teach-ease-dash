@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, Loader2 } from "lucide-react";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -36,18 +36,77 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        toast({
-          title: "Login failed",
-          description: error.message,
-          variant: "destructive",
-        });
+        // Check if the user is banned (suspended)
+        if (error.message.includes('banned') || error.message.includes('suspended')) {
+          toast({
+            title: "Account Paused",
+            description: "Your account has been temporarily paused. Please contact the administrator.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Login failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        }
+        return;
       }
+
+      // Check if the user has a valid role (teacher, admin, or super_admin)
+      if (data.session) {
+        const { data: hasTeacherRole } = await supabase.rpc('has_role', {
+          _user_id: data.session.user.id,
+          _role: 'teacher'
+        });
+
+        const { data: hasAdminRole } = await supabase.rpc('has_role', {
+          _user_id: data.session.user.id,
+          _role: 'admin'
+        });
+
+        const { data: hasSuperAdminRole } = await supabase.rpc('has_role', {
+          _user_id: data.session.user.id,
+          _role: 'super_admin'
+        });
+
+        if (!hasTeacherRole && !hasAdminRole && !hasSuperAdminRole) {
+          await supabase.auth.signOut();
+          toast({
+            title: "Access Denied",
+            description: "You don't have permission to access this application.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Check if teacher is suspended in the teachers table
+        if ((hasTeacherRole || hasAdminRole) && !hasSuperAdminRole) {
+          const { data: teacher } = await supabase
+            .from('teachers')
+            .select('status')
+            .eq('user_id', data.session.user.id)
+            .single();
+
+          if (teacher?.status === 'suspended') {
+            await supabase.auth.signOut();
+            toast({
+              title: "Account Paused",
+              description: "Your account has been temporarily paused. Please contact the administrator.",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+      }
+
+      // Success - navigation handled by onAuthStateChange
     } catch (error) {
       toast({
         title: "Error",
@@ -76,7 +135,7 @@ const Auth = () => {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@example.com"
+                placeholder="teacher@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -94,7 +153,14 @@ const Auth = () => {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Sign In"
+              )}
             </Button>
           </form>
         </CardContent>

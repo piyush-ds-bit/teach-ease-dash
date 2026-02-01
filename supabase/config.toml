@@ -2,3 +2,6 @@ project_id = "pllnboggbgghjyunmwdp"
 
 [functions.lending-link-legacy]
 verify_jwt = false
+
+[functions.teacher-management]
+verify_jwt = false
