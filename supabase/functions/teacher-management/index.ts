@@ -186,10 +186,10 @@ async function createTeacher(
     // Don't fail the whole operation, just log
   }
 
-  // Generate password reset link for teacher to set their password
-  // Use redirect_to to ensure Supabase redirects to our auth callback page
+  // Generate invite link for teacher to set their password
+  // Use type: 'invite' for proper onboarding flow (not recovery)
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-    type: 'recovery',
+    type: 'invite',
     email: email.toLowerCase(),
     options: {
       redirectTo: 'https://piyushbusiness.lovable.app/auth/callback',
@@ -290,9 +290,9 @@ async function resendInvite(
     );
   }
 
-  // Generate new password reset link with redirect to auth callback
+  // Generate new invite link with redirect to auth callback
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-    type: 'recovery',
+    type: 'invite',
     email: teacher.email,
     options: {
       redirectTo: 'https://piyushbusiness.lovable.app/auth/callback',
