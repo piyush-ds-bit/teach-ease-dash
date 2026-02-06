@@ -187,22 +187,17 @@ async function createTeacher(
   }
 
   // Generate password reset link for teacher to set their password
+  // Use redirect_to to ensure Supabase redirects to our auth callback page
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
     type: 'recovery',
     email: email.toLowerCase(),
+    options: {
+      redirectTo: 'https://piyushbusiness.lovable.app/auth/callback',
+    },
   });
 
-  // Extract the token from the action_link and build the actual invite URL
-  let inviteLink = '';
-  if (linkData?.properties?.action_link) {
-    // The action_link format is: https://[project].supabase.co/auth/v1/verify?token=...&type=recovery&redirect_to=...
-    // We need to extract the token and build a proper frontend URL
-    const actionUrl = new URL(linkData.properties.action_link);
-    const token = actionUrl.searchParams.get('token');
-    if (token) {
-      inviteLink = `https://piyushbusiness.lovable.app/reset-password?token=${token}&type=recovery`;
-    }
-  }
+  // Use the Supabase action_link directly - it will redirect to /auth/callback after verification
+  const inviteLink = linkData?.properties?.action_link || '';
 
   return new Response(
     JSON.stringify({
@@ -295,20 +290,17 @@ async function resendInvite(
     );
   }
 
-  // Generate new password reset link
+  // Generate new password reset link with redirect to auth callback
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
     type: 'recovery',
     email: teacher.email,
+    options: {
+      redirectTo: 'https://piyushbusiness.lovable.app/auth/callback',
+    },
   });
 
-  let inviteLink = '';
-  if (linkData?.properties?.action_link) {
-    const actionUrl = new URL(linkData.properties.action_link);
-    const token = actionUrl.searchParams.get('token');
-    if (token) {
-      inviteLink = `https://piyushbusiness.lovable.app/reset-password?token=${token}&type=recovery`;
-    }
-  }
+  // Use the Supabase action_link directly
+  const inviteLink = linkData?.properties?.action_link || '';
 
   return new Response(
     JSON.stringify({

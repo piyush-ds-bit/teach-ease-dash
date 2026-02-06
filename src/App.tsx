@@ -17,6 +17,8 @@ import Lending from "./pages/Lending";
 import BorrowerProfile from "./pages/BorrowerProfile";
 import TeacherManagement from "./pages/TeacherManagement";
 import ResetPassword from "./pages/ResetPassword";
+import AuthCallback from "./pages/AuthCallback";
+import SetPassword from "./pages/SetPassword";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +31,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/set-password" element={<SetPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           
           {/* Admin Routes - Protected by role check */}
