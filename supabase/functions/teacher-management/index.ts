@@ -138,27 +138,42 @@ async function createTeacher(
     );
   }
 
-  // Create auth user with a temporary random password
-  // Teacher will set their own password via invite link
-  const tempPassword = crypto.randomUUID() + crypto.randomUUID();
-
-  const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+  // Use generateLink with type 'invite' to create user AND generate invite link in one step
+  // This is the proper Supabase pattern - it creates the user if they don't exist
+  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'invite',
     email: email.toLowerCase(),
-    password: tempPassword,
-    email_confirm: true, // Auto-confirm email so they can set password
-    user_metadata: { full_name },
+    options: {
+      redirectTo: 'https://piyushbusiness.lovable.app/auth/callback',
+      data: { full_name },
+    },
   });
 
-  if (authError || !authUser.user) {
+  if (linkError) {
+    console.error('Invite link generation failed:', JSON.stringify(linkError, null, 2));
     return new Response(
-      JSON.stringify({ error: authError?.message || 'Failed to create user' }),
+      JSON.stringify({ 
+        error: `Failed to generate invite: ${linkError.message}`,
+        details: linkError
+      }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
+  if (!linkData?.user) {
+    console.error('No user returned from generateLink');
+    return new Response(
+      JSON.stringify({ error: 'Failed to create user account' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const userId = linkData.user.id;
+  const inviteLink = linkData.properties?.action_link || '';
+
   // Insert into teachers table
   const { error: teacherError } = await supabaseAdmin.from('teachers').insert({
-    user_id: authUser.user.id,
+    user_id: userId,
     email: email.toLowerCase(),
     full_name,
     phone: phone || null,
@@ -168,7 +183,8 @@ async function createTeacher(
 
   if (teacherError) {
     // Rollback: delete the auth user
-    await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+    console.error('Teacher insert failed:', teacherError);
+    await supabaseAdmin.auth.admin.deleteUser(userId);
     return new Response(
       JSON.stringify({ error: teacherError.message }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -177,7 +193,7 @@ async function createTeacher(
 
   // Assign 'teacher' role in user_roles
   const { error: roleError } = await supabaseAdmin.from('user_roles').insert({
-    user_id: authUser.user.id,
+    user_id: userId,
     role: 'teacher',
   });
 
@@ -186,28 +202,15 @@ async function createTeacher(
     // Don't fail the whole operation, just log
   }
 
-  // Generate invite link for teacher to set their password
-  // Use type: 'invite' for proper onboarding flow (not recovery)
-  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-    type: 'invite',
-    email: email.toLowerCase(),
-    options: {
-      redirectTo: 'https://piyushbusiness.lovable.app/auth/callback',
-    },
-  });
-
-  // Use the Supabase action_link directly - it will redirect to /auth/callback after verification
-  const inviteLink = linkData?.properties?.action_link || '';
-
   return new Response(
     JSON.stringify({
       success: true,
       teacher: {
-        user_id: authUser.user.id,
+        user_id: userId,
         email: email.toLowerCase(),
         full_name,
       },
-      invite_link: inviteLink || 'Link generation failed. Use resend-invite.',
+      invite_link: inviteLink || 'Link generation failed - check Supabase email provider settings',
     }),
     { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
