@@ -1,232 +1,202 @@
 
-# Teacher-Only Platform Implementation Plan
+# Fix Teacher Invite Flow - 404 Error Resolution
 
-## Overview
-Transform the app into a teacher-only platform where:
-- You (piyushbusiness@example.com) are the only Super Admin
-- Teachers can only be created via invite by the Super Admin
-- Each teacher sees only their own data
-- No student login functionality
+## Problem Summary
+Teachers clicking invite links see a 404 error because:
+1. Missing `/auth/callback` route to handle Supabase auth redirects
+2. The current flow doesn't properly handle Supabase's standard recovery redirect mechanism
+3. Need to add `/set-password` as a cleaner route for the password setup
 
-## Current State (Already Done)
-Based on the existing codebase and memories:
-- `super_admin` role exists in database
-- `teachers` table with status (active/suspended) exists
-- All data tables have `teacher_id` column
-- RLS policies enforce `teacher_id = auth.uid()` isolation
-- Student login pages already removed
-
-## Phase 1: Cleanup Legacy Student Auth Code
-
-### 1.1 Delete student-auth Edge Function
-Remove `supabase/functions/student-auth/` entirely - no longer needed.
-
-### 1.2 Update ProtectedAdminRoute
-Remove the student session localStorage check (lines 40-44) and update to check for `teacher` OR `admin` OR `super_admin` roles.
+## Solution Architecture
 
 ```text
-Changes to src/components/admin/ProtectedAdminRoute.tsx:
-- Remove localStorage student_session check
-- Update role check to include: teacher, admin, super_admin
++------------------+     +-------------------+     +------------------+     +-------------+
+| Super Admin      | --> | Edge Function     | --> | Invite Link      | --> | Teacher     |
+| Creates Teacher  |     | Generates Link    |     | with Token       |     | Clicks Link |
++------------------+     +-------------------+     +------------------+     +-------------+
+                                                                                   |
+                                                                                   v
++------------------+     +-------------------+     +------------------+     +-------------+
+| /dashboard       | <-- | /set-password     | <-- | /auth/callback   | <-- | Supabase    |
+| Teacher Logged In|     | Set New Password  |     | Process Token    |     | Verifies    |
++------------------+     +-------------------+     +------------------+     +-------------+
 ```
 
 ---
 
-## Phase 2: Create Teacher Management Infrastructure
+## Implementation Steps
 
-### 2.1 New Edge Function: teacher-management
-Create `supabase/functions/teacher-management/index.ts` to handle:
-- **Create teacher**: Uses Supabase Admin API to create auth user
-- **Generate invite link**: Creates password reset link for first-time login
-- **Update status**: Pause/resume teacher accounts
+### Step 1: Create Auth Callback Page
+
+Create a new file: `src/pages/AuthCallback.tsx`
+
+This page will:
+- Extract hash fragments from URL (Supabase uses `#access_token=...` format)
+- Call `supabase.auth.getSession()` to establish session from URL tokens
+- If valid session: redirect to `/set-password`
+- If no session: show error and redirect to `/auth`
+- Display loading spinner during processing
 
 ```text
-Endpoints:
-POST /create - Create new teacher (super_admin only)
-  - Creates Supabase Auth user
-  - Inserts into teachers table
-  - Assigns 'teacher' role in user_roles
-  - Returns invite link
-
-POST /update-status - Pause/resume teacher (super_admin only)
-  - Updates teachers.status
-  - If paused: marks auth user as banned
-
-POST /resend-invite - Regenerate invite link (super_admin only)
+Flow:
+1. User lands on /auth/callback#access_token=xxx&type=recovery
+2. Supabase client automatically parses hash fragment
+3. getSession() returns the authenticated user
+4. Redirect to /set-password
 ```
 
-### 2.2 Update supabase/config.toml
-Add teacher-management function with `verify_jwt = false` (we validate in code).
+### Step 2: Create Set Password Page
 
----
+Create a new file: `src/pages/SetPassword.tsx`
 
-## Phase 3: Protected Routes for Super Admin
+This is a simplified, dedicated page for invited teachers:
+- New Password field
+- Confirm Password field  
+- Submit button
+- Validation: passwords match, minimum 6 characters
+- On submit: `supabase.auth.updateUser({ password })`
+- On success: redirect to `/dashboard`
 
-### 3.1 Create ProtectedSuperAdminRoute Component
-`src/components/admin/ProtectedSuperAdminRoute.tsx`
-- Check for `super_admin` role
-- Redirect to dashboard if not super admin
+This is cleaner than repurposing the existing ResetPassword page.
 
-### 3.2 Add Super Admin Routes to App.tsx
+### Step 3: Update Router in App.tsx
+
+Add two new routes before the catch-all:
 ```text
-/super-admin/teachers → Teacher management page
+/auth/callback → AuthCallback component (no protection)
+/set-password → SetPassword component (requires active session)
 ```
 
----
+Keep the existing `/reset-password` route for backward compatibility.
 
-## Phase 4: Teacher Management UI (Super Admin Only)
+### Step 4: Update Edge Function Invite URL
 
-### 4.1 Teacher Management Page
-`src/pages/TeacherManagement.tsx`
+Modify `supabase/functions/teacher-management/index.ts`:
 
-Layout:
+Instead of building a custom URL with token parameter, use Supabase's proper redirect flow:
+
 ```text
-+--------------------------------------------------+
-| TeachEase - Teacher Management                   |
-+--------------------------------------------------+
-| [+ Add Teacher]                                  |
-+--------------------------------------------------+
-| Teachers List                                    |
-| +----------------------------------------------+ |
-| | Name     | Email    | Status | Actions      | |
-| |----------|----------|--------|--------------||| |
-| | John Doe | j@ex.com | Active | Pause | Link | |
-| | Jane Doe | ja@ex.com| Paused | Resume| Link | |
-| +----------------------------------------------+ |
-+--------------------------------------------------+
+Option A (Recommended): Use the Supabase action_link directly
+- The action_link format: https://[project].supabase.co/auth/v1/verify?...&redirect_to=SITE_URL
+- Configure Site URL in Supabase to: https://piyushbusiness.lovable.app/auth/callback
+- Teacher clicks link → Supabase verifies → redirects to /auth/callback with session
+
+Option B: Keep current approach but fix it
+- Generate the link with redirect_to parameter
+- Extract token and build frontend URL with proper handling
 ```
 
-### 4.2 AddTeacherDialog Component
-`src/components/teachers/AddTeacherDialog.tsx`
-- Full Name (required)
-- Email (required)
-- Phone (optional)
-- Initial status: Active
+For this implementation, we'll use **Option A** since it's the standard Supabase pattern.
 
-On submit:
-1. Call teacher-management edge function
-2. Show invite link in success dialog with copy button
+### Step 5: SPA Routing Configuration
 
-### 4.3 TeachersTable Component
-`src/components/teachers/TeachersTable.tsx`
-- List all teachers
-- Show status badge (Active/Suspended)
-- Actions: Pause/Resume, Copy Invite Link
+For Lovable's hosting, SPA routing is automatically handled. The 404 issue is caused by missing routes, not hosting configuration.
 
-### 4.4 Super Admin FAB (Floating Action Button)
-`src/components/admin/SuperAdminFAB.tsx`
-- Shows only for super_admin role
-- Fixed bottom-left position
-- Links to /super-admin/teachers
-
----
-
-## Phase 5: Update Auth Flow
-
-### 5.1 Update Auth Page Login
-`src/pages/Auth.tsx`
-- After login, check if teacher is suspended
-- If suspended: sign out and show "Account paused" message
-- No sign-up button (invite-only)
-
-### 5.2 Update ProtectedAdminRoute
-After auth check, also verify teacher is not suspended by checking `teachers` table.
-
----
-
-## Phase 6: Add teacher_id to All Data Operations
-
-### 6.1 Update Insert Operations
-All insert operations must include `teacher_id: user.id`
-
-Files to update:
-| File | Function/Component |
-|------|-------------------|
-| `src/components/dashboard/AddStudentDialog.tsx` | Add teacher_id to insert |
-| `src/components/student/AddPaymentDialog.tsx` | Add teacher_id to insert |
-| `src/components/routine/AddRoutineDialog.tsx` | Add teacher_id to insert |
-| `src/lib/ledgerCalculation.ts` | Add teacher_id to all insert functions |
-| `src/components/homework/AddHomeworkDialog.tsx` | Add teacher_id to insert |
-
-Pattern for each file:
-```typescript
-// Get current user
-const { data: { user } } = await supabase.auth.getUser();
-if (!user) throw new Error('Not authenticated');
-
-// Include teacher_id in insert
-await supabase.from("table_name").insert({
-  ...otherFields,
-  teacher_id: user.id,
-});
-```
-
-### 6.2 Update Edit Operations
-Files like EditStudentDialog, EditPaymentDialog, EditRoutineDialog should NOT change teacher_id on update (it's immutable).
-
----
-
-## Phase 7: Navigation Updates
-
-### 7.1 Update DashboardHeader
-`src/components/dashboard/DashboardHeader.tsx`
-- Remove any student-related links (already done)
-- Keep: Students, Routine, Lending, Logout
-
-### 7.2 Add Super Admin FAB
-Visible only to super_admin role at bottom-left corner, linking to teacher management.
+No changes needed to vite.config.ts or public folder.
 
 ---
 
 ## File Changes Summary
 
-### New Files
-| File | Purpose |
-|------|---------|
-| `supabase/functions/teacher-management/index.ts` | Edge function for teacher CRUD |
-| `src/components/admin/ProtectedSuperAdminRoute.tsx` | Route guard for super admin |
-| `src/components/admin/SuperAdminFAB.tsx` | Floating button for super admin |
-| `src/pages/TeacherManagement.tsx` | Teacher management page |
-| `src/components/teachers/AddTeacherDialog.tsx` | Add teacher dialog |
-| `src/components/teachers/TeachersTable.tsx` | Teachers list table |
-| `src/hooks/useCurrentUserRole.ts` | Hook to check current user's role |
-
-### Modified Files
-| File | Changes |
-|------|---------|
-| `src/App.tsx` | Add super admin routes |
-| `src/components/admin/ProtectedAdminRoute.tsx` | Remove student references, add teacher/super_admin checks |
-| `src/pages/Auth.tsx` | Add suspended teacher check |
-| `src/components/dashboard/DashboardHeader.tsx` | Add SuperAdminFAB |
-| `src/components/dashboard/AddStudentDialog.tsx` | Add teacher_id |
-| `src/components/student/AddPaymentDialog.tsx` | Add teacher_id |
-| `src/components/routine/AddRoutineDialog.tsx` | Add teacher_id |
-| `src/lib/ledgerCalculation.ts` | Add teacher_id to all functions |
-| `supabase/config.toml` | Add teacher-management function |
-
-### Deleted Files
-| File | Reason |
-|------|--------|
-| `supabase/functions/student-auth/` | Student auth no longer needed |
+| Action | File | Purpose |
+|--------|------|---------|
+| Create | `src/pages/AuthCallback.tsx` | Handle Supabase auth redirects, parse tokens |
+| Create | `src/pages/SetPassword.tsx` | Clean password setup page for invited teachers |
+| Modify | `src/App.tsx` | Add `/auth/callback` and `/set-password` routes |
+| Modify | `supabase/functions/teacher-management/index.ts` | Update invite link generation to use Supabase redirect |
 
 ---
 
-## Security Considerations
+## Detailed Implementation
 
-1. **Role Verification**: All super_admin operations verified server-side in edge function
-2. **teacher_id Isolation**: RLS policies already enforce data isolation
-3. **Invite-Only**: No public signup - teachers created via edge function with admin API
-4. **Suspended Teachers**: Auth check blocks login for paused accounts
-5. **bcrypt**: Edge function uses bcrypt for any password operations (cost factor 12)
+### AuthCallback.tsx
+```text
+Purpose: Token processing page (no visible UI except loading)
+
+Logic:
+1. useEffect on mount:
+   - Call supabase.auth.getSession()
+   - This automatically processes hash fragments from URL
+   
+2. If session exists:
+   - Check if this is a recovery flow (user needs to set password)
+   - Redirect to /set-password
+
+3. If no session after processing:
+   - Show "Invalid or expired link" message
+   - Button to go to /auth
+
+4. Loading state:
+   - Show spinner while processing
+```
+
+### SetPassword.tsx  
+```text
+Purpose: Password setup for invited teachers
+
+Requirements:
+- Must have active session (redirect to /auth if not)
+- Show password form
+- Validate password match and length
+- Update password via supabase.auth.updateUser()
+- Redirect to /dashboard on success
+```
+
+### Edge Function Changes
+```text
+Current (line 203):
+inviteLink = `https://piyushbusiness.lovable.app/reset-password?token=${token}&type=recovery`;
+
+New approach:
+Use generateLink with proper redirect_to:
+- The Supabase action_link already includes redirect_to
+- We just need to ensure Site URL is configured correctly in Supabase
+- Or we override redirect_to in the generateLink call
+
+Actually, the cleanest fix is to use the Supabase action_link as-is, 
+since it will redirect to the Site URL configured in Supabase Auth settings.
+
+The invite link will be the raw Supabase verification URL.
+```
 
 ---
 
-## Testing Checklist
-After implementation:
-- [ ] Super Admin can create new teachers
-- [ ] Invite link works for first-time teacher login
-- [ ] Teachers see only their own students/data
-- [ ] Paused teachers cannot log in
-- [ ] Super Admin FAB visible only to super_admin
-- [ ] Teacher management page accessible only to super_admin
-- [ ] All insert operations include teacher_id
+## Configuration Required (Manual Step)
+
+You must set the **Site URL** in Supabase Auth settings to:
+
+```text
+https://piyushbusiness.lovable.app
+```
+
+**Location**: Supabase Dashboard → Authentication → URL Configuration → Site URL
+
+Additionally, add to **Redirect URLs**:
+```text
+https://piyushbusiness.lovable.app/auth/callback
+https://piyushbusiness.lovable.app/**
+```
+
+This ensures Supabase knows where to redirect after verifying the recovery token.
+
+---
+
+## Updated Invite Flow (After Fix)
+
+1. Super Admin creates teacher account
+2. Edge function generates Supabase verification URL
+3. Super Admin copies and sends the link to teacher
+4. Teacher clicks link
+5. Supabase verifies token and redirects to `/auth/callback`
+6. `/auth/callback` processes session and redirects to `/set-password`
+7. Teacher sets password
+8. Redirect to `/dashboard`
+
+---
+
+## Security Notes
+
+- `/auth/callback` - Public route (needs to process redirects)
+- `/set-password` - Requires authenticated session (checks in component)
+- No changes to existing role-based access control
+- No changes to RLS policies
