@@ -339,6 +339,41 @@ export type Database = {
         }
         Relationships: []
       }
+      student_fee_history: {
+        Row: {
+          created_at: string
+          effective_from_month: string
+          id: string
+          monthly_fee: number
+          student_id: string
+          teacher_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          effective_from_month: string
+          id?: string
+          monthly_fee: number
+          student_id: string
+          teacher_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          effective_from_month?: string
+          id?: string
+          monthly_fee?: number
+          student_id?: string
+          teacher_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_fee_history_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
           class: string

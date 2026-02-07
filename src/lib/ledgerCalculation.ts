@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { FeeHistoryEntry, getApplicableFee } from "@/lib/feeHistoryCalculation";
 
 export type LedgerEntryType = 'FEE_DUE' | 'PAYMENT' | 'PAUSE' | 'UNPAUSE' | 'ADJUSTMENT';
 
@@ -86,13 +87,14 @@ export const calculateLedgerSummary = (entries: LedgerEntry[]): LedgerSummary =>
 
 /**
  * Generate fee due entries for a student based on their joining date
- * This should be called to sync ledger with expected fees
+ * Now supports fee history for correct per-month fees
  */
 export const generateFeeEntries = async (
   studentId: string,
   joiningDate: Date,
   monthlyFee: number,
-  pausedMonths: string[] = []
+  pausedMonths: string[] = [],
+  feeHistory: FeeHistoryEntry[] = []
 ): Promise<LedgerEntry[]> => {
   const now = new Date();
   const monthsToCharge = getMonthsBetween(joiningDate, now);
@@ -115,14 +117,29 @@ export const generateFeeEntries = async (
   // Get current user for teacher_id
   const { data: { user } } = await supabase.auth.getUser();
   
-  const newEntries = newMonths.map(month => ({
-    student_id: studentId,
-    entry_type: 'FEE_DUE' as const,
-    month_key: month,
-    amount: monthlyFee,
-    description: `Monthly fee for ${formatMonthKey(month)}`,
-    teacher_id: user?.id || null,
-  }));
+  // Use fee history to get correct fee for each month
+  const newEntries = newMonths.map(month => {
+    let feeForMonth = monthlyFee; // Default to current fee
+    
+    // If we have fee history, use it to get the correct fee for this month
+    if (feeHistory.length > 0) {
+      try {
+        feeForMonth = getApplicableFee(month, feeHistory);
+      } catch {
+        // Fallback to monthlyFee if fee history lookup fails
+        feeForMonth = monthlyFee;
+      }
+    }
+    
+    return {
+      student_id: studentId,
+      entry_type: 'FEE_DUE' as const,
+      month_key: month,
+      amount: feeForMonth,
+      description: `Monthly fee for ${formatMonthKey(month)}`,
+      teacher_id: user?.id || null,
+    };
+  });
   
   const { data, error } = await supabase
     .from('fee_ledger')
@@ -346,12 +363,14 @@ export const syncLedgerWithPausedMonths = async (
 
 /**
  * Full ledger sync for a student - generates fees, syncs payments and pauses
+ * Now supports fee history for correct per-month fees
  */
 export const fullLedgerSync = async (
   studentId: string,
   joiningDate: Date,
   monthlyFee: number,
-  pausedMonths: string[] = []
+  pausedMonths: string[] = [],
+  feeHistory: FeeHistoryEntry[] = []
 ): Promise<LedgerEntry[]> => {
   // Sync paused months first
   await syncLedgerWithPausedMonths(studentId, pausedMonths);
@@ -359,8 +378,8 @@ export const fullLedgerSync = async (
   // Sync payments
   await syncLedgerWithPayments(studentId);
   
-  // Generate fee entries
-  await generateFeeEntries(studentId, joiningDate, monthlyFee, pausedMonths);
+  // Generate fee entries with fee history support
+  await generateFeeEntries(studentId, joiningDate, monthlyFee, pausedMonths, feeHistory);
   
   // Return full ledger
   return getStudentLedger(studentId);

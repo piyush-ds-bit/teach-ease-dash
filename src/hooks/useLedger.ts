@@ -7,12 +7,14 @@ import {
   fullLedgerSync,
   getStudentLedger,
 } from '@/lib/ledgerCalculation';
+import { FeeHistoryEntry } from '@/lib/feeHistoryCalculation';
 
 interface UseLedgerOptions {
   studentId: string;
   joiningDate?: Date;
   monthlyFee?: number;
   pausedMonths?: string[];
+  feeHistory?: FeeHistoryEntry[];
   autoSync?: boolean;
 }
 
@@ -30,6 +32,7 @@ export const useLedger = ({
   joiningDate,
   monthlyFee,
   pausedMonths = [],
+  feeHistory = [],
   autoSync = true,
 }: UseLedgerOptions): UseLedgerReturn => {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
@@ -73,7 +76,8 @@ export const useLedger = ({
         studentId,
         joiningDate,
         monthlyFee,
-        pausedMonths
+        pausedMonths,
+        feeHistory
       );
       setEntries(ledgerEntries);
       setSummary(calculateLedgerSummary(ledgerEntries));
@@ -83,7 +87,7 @@ export const useLedger = ({
     } finally {
       setLoading(false);
     }
-  }, [studentId, joiningDate, monthlyFee, pausedMonths]);
+  }, [studentId, joiningDate, monthlyFee, pausedMonths, feeHistory]);
 
   // Initial load - sync if autoSync is enabled and we have the required data
   useEffect(() => {
