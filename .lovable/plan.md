@@ -1,202 +1,283 @@
 
-# Fix Teacher Invite Flow - 404 Error Resolution
+# Fee History Tracking Implementation Plan
 
-## Problem Summary
-Teachers clicking invite links see a 404 error because:
-1. Missing `/auth/callback` route to handle Supabase auth redirects
-2. The current flow doesn't properly handle Supabase's standard recovery redirect mechanism
-3. Need to add `/set-password` as a cleaner route for the password setup
+## Overview
 
-## Solution Architecture
+This plan fixes the issue where changing a student's monthly fee incorrectly applies the new rate to all past months. After implementation, fee changes will only affect the current month and future months, while past dues remain calculated at their original rates.
 
-```text
-+------------------+     +-------------------+     +------------------+     +-------------+
-| Super Admin      | --> | Edge Function     | --> | Invite Link      | --> | Teacher     |
-| Creates Teacher  |     | Generates Link    |     | with Token       |     | Clicks Link |
-+------------------+     +-------------------+     +------------------+     +-------------+
-                                                                                   |
-                                                                                   v
-+------------------+     +-------------------+     +------------------+     +-------------+
-| /dashboard       | <-- | /set-password     | <-- | /auth/callback   | <-- | Supabase    |
-| Teacher Logged In|     | Set New Password  |     | Process Token    |     | Verifies    |
-+------------------+     +-------------------+     +------------------+     +-------------+
-```
+---
+
+## What's Changing
+
+When you update a student's fee from ₹1500 to ₹2000:
+- **Before**: All months (Jan to present) incorrectly show ₹2000 each
+- **After**: Jan-Apr remain at ₹1500, May onward at ₹2000
 
 ---
 
 ## Implementation Steps
 
-### Step 1: Create Auth Callback Page
+### Step 1: Create Fee History Table
 
-Create a new file: `src/pages/AuthCallback.tsx`
+Create a new database table `student_fee_history` to track fee changes:
 
-This page will:
-- Extract hash fragments from URL (Supabase uses `#access_token=...` format)
-- Call `supabase.auth.getSession()` to establish session from URL tokens
-- If valid session: redirect to `/set-password`
-- If no session: show error and redirect to `/auth`
-- Display loading spinner during processing
-
-```text
-Flow:
-1. User lands on /auth/callback#access_token=xxx&type=recovery
-2. Supabase client automatically parses hash fragment
-3. getSession() returns the authenticated user
-4. Redirect to /set-password
-```
-
-### Step 2: Create Set Password Page
-
-Create a new file: `src/pages/SetPassword.tsx`
-
-This is a simplified, dedicated page for invited teachers:
-- New Password field
-- Confirm Password field  
-- Submit button
-- Validation: passwords match, minimum 6 characters
-- On submit: `supabase.auth.updateUser({ password })`
-- On success: redirect to `/dashboard`
-
-This is cleaner than repurposing the existing ResetPassword page.
-
-### Step 3: Update Router in App.tsx
-
-Add two new routes before the catch-all:
-```text
-/auth/callback → AuthCallback component (no protection)
-/set-password → SetPassword component (requires active session)
-```
-
-Keep the existing `/reset-password` route for backward compatibility.
-
-### Step 4: Update Edge Function Invite URL
-
-Modify `supabase/functions/teacher-management/index.ts`:
-
-Instead of building a custom URL with token parameter, use Supabase's proper redirect flow:
-
-```text
-Option A (Recommended): Use the Supabase action_link directly
-- The action_link format: https://[project].supabase.co/auth/v1/verify?...&redirect_to=SITE_URL
-- Configure Site URL in Supabase to: https://piyushbusiness.lovable.app/auth/callback
-- Teacher clicks link → Supabase verifies → redirects to /auth/callback with session
-
-Option B: Keep current approach but fix it
-- Generate the link with redirect_to parameter
-- Extract token and build frontend URL with proper handling
-```
-
-For this implementation, we'll use **Option A** since it's the standard Supabase pattern.
-
-### Step 5: SPA Routing Configuration
-
-For Lovable's hosting, SPA routing is automatically handled. The 404 issue is caused by missing routes, not hosting configuration.
-
-No changes needed to vite.config.ts or public folder.
-
----
-
-## File Changes Summary
-
-| Action | File | Purpose |
+| Column | Type | Purpose |
 |--------|------|---------|
-| Create | `src/pages/AuthCallback.tsx` | Handle Supabase auth redirects, parse tokens |
-| Create | `src/pages/SetPassword.tsx` | Clean password setup page for invited teachers |
-| Modify | `src/App.tsx` | Add `/auth/callback` and `/set-password` routes |
-| Modify | `supabase/functions/teacher-management/index.ts` | Update invite link generation to use Supabase redirect |
+| id | uuid | Primary key |
+| student_id | uuid | Links to students table |
+| monthly_fee | numeric | Fee amount for this period |
+| effective_from_month | text | YYYY-MM format when fee starts |
+| created_at | timestamp | When record was created |
+| teacher_id | uuid | For data isolation |
+
+Add RLS policies matching the students table pattern.
+
+### Step 2: Backward Compatibility Migration
+
+Run a one-time data migration to create fee history for all existing students:
+- For each student without fee history
+- Create one entry using their current `monthly_fee`
+- Set `effective_from_month` to their joining month
+
+This ensures existing data continues to work correctly.
+
+### Step 3: Update Student Creation Flow
+
+Modify `AddStudentDialog.tsx`:
+- After creating the student record
+- Insert initial fee history entry with `effective_from_month` = joining month
+
+### Step 4: Update Fee Edit Flow
+
+Modify `EditStudentDialog.tsx`:
+- When monthly fee changes
+- Insert a **new** fee history entry with `effective_from_month` = current month (YYYY-MM)
+- Continue updating `students.monthly_fee` for display purposes
+- Do NOT modify past fee history entries
+
+### Step 5: Create Fee History Helper Functions
+
+Create new file `src/lib/feeHistoryCalculation.ts`:
+
+```text
+Functions to implement:
+├── getFeeForMonth(studentId, monthKey) → Returns applicable fee for a specific month
+├── getFeeHistory(studentId) → Returns all fee history entries
+├── calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths) → Calculates total using correct fees per month
+└── getApplicableFee(monthKey, feeHistory) → Finds fee that was active for a given month
+```
+
+**Core Logic:**
+For each month from joining to now:
+1. Find the fee history entry where `effective_from_month ≤ month`
+2. Use the most recent such entry (latest effective date that hasn't passed the month)
+3. Skip paused months
+4. Sum all applicable fees
+
+### Step 6: Update Fee Calculation Functions
+
+Modify `src/lib/feeCalculation.ts`:
+
+**calculateTotalPayable()** - Update to accept fee history array:
+```text
+Before: calculateTotalPayable(joiningDate, monthlyFee, pausedMonths)
+After:  calculateTotalPayable(joiningDate, feeHistory, pausedMonths)
+
+Logic change:
+- Instead of count × monthlyFee
+- Sum each month's individual fee based on what was active that month
+```
+
+**getStudentFeeData()** - Fetch and include fee history:
+```text
+- Add query to fetch student_fee_history
+- Pass fee history to calculation functions
+- Return fee history in response for UI use
+```
+
+### Step 7: Update Ledger Generation
+
+Modify `src/lib/ledgerCalculation.ts`:
+
+**generateFeeEntries()** - Use correct fee per month:
+```text
+Before: All entries use same monthlyFee
+After:  Each entry uses the fee that was active for that specific month
+```
+
+### Step 8: Update Component Fee Calculations
+
+**StudentsTable.tsx:**
+- Fetch fee history for each student
+- Pass to updated calculateTotalPayable()
+
+**StudentProfile.tsx:**
+- Fetch fee history
+- Use in all due calculations
+
+**FeeTimeline.tsx:**
+- No changes needed (already uses ledger entries with amounts)
+
+### Step 9: Update PDF Generation
+
+**pdfGenerator.ts:**
+- Partial due calculations will automatically use correct amounts
+- No structural changes needed since it receives pendingMonths and totalDue as inputs
 
 ---
 
-## Detailed Implementation
+## Files to Create
 
-### AuthCallback.tsx
-```text
-Purpose: Token processing page (no visible UI except loading)
+| File | Purpose |
+|------|---------|
+| `src/lib/feeHistoryCalculation.ts` | New helper functions for fee history |
 
-Logic:
-1. useEffect on mount:
-   - Call supabase.auth.getSession()
-   - This automatically processes hash fragments from URL
-   
-2. If session exists:
-   - Check if this is a recovery flow (user needs to set password)
-   - Redirect to /set-password
+## Files to Modify
 
-3. If no session after processing:
-   - Show "Invalid or expired link" message
-   - Button to go to /auth
+| File | Changes |
+|------|---------|
+| `src/lib/feeCalculation.ts` | Update functions to use fee history |
+| `src/lib/ledgerCalculation.ts` | Use correct fee per month when generating entries |
+| `src/components/dashboard/AddStudentDialog.tsx` | Insert initial fee history on creation |
+| `src/components/student/EditStudentDialog.tsx` | Insert new fee history on fee change |
+| `src/components/dashboard/StudentsTable.tsx` | Fetch and use fee history |
+| `src/pages/StudentProfile.tsx` | Fetch and use fee history |
+| `src/hooks/useLedger.ts` | Pass fee history to sync function |
 
-4. Loading state:
-   - Show spinner while processing
-```
+---
 
-### SetPassword.tsx  
-```text
-Purpose: Password setup for invited teachers
+## Database Migration SQL
 
-Requirements:
-- Must have active session (redirect to /auth if not)
-- Show password form
-- Validate password match and length
-- Update password via supabase.auth.updateUser()
-- Redirect to /dashboard on success
-```
+```sql
+-- Create fee history table
+CREATE TABLE public.student_fee_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  monthly_fee numeric NOT NULL,
+  effective_from_month text NOT NULL, -- Format: YYYY-MM
+  created_at timestamptz NOT NULL DEFAULT now(),
+  teacher_id uuid,
+  
+  -- Ensure one fee per effective month per student
+  UNIQUE(student_id, effective_from_month)
+);
 
-### Edge Function Changes
-```text
-Current (line 203):
-inviteLink = `https://piyushbusiness.lovable.app/reset-password?token=${token}&type=recovery`;
+-- Enable RLS
+ALTER TABLE public.student_fee_history ENABLE ROW LEVEL SECURITY;
 
-New approach:
-Use generateLink with proper redirect_to:
-- The Supabase action_link already includes redirect_to
-- We just need to ensure Site URL is configured correctly in Supabase
-- Or we override redirect_to in the generateLink call
+-- RLS policies (same pattern as students table)
+CREATE POLICY "Teachers/admins can view own fee history"
+  ON public.student_fee_history FOR SELECT
+  USING (
+    (teacher_id = auth.uid() AND (has_role(auth.uid(), 'teacher') OR has_role(auth.uid(), 'admin')))
+    OR has_role(auth.uid(), 'admin')
+  );
 
-Actually, the cleanest fix is to use the Supabase action_link as-is, 
-since it will redirect to the Site URL configured in Supabase Auth settings.
+CREATE POLICY "Teachers/admins can insert own fee history"
+  ON public.student_fee_history FOR INSERT
+  WITH CHECK (
+    teacher_id = auth.uid() AND (has_role(auth.uid(), 'teacher') OR has_role(auth.uid(), 'admin'))
+  );
 
-The invite link will be the raw Supabase verification URL.
+-- Backfill existing students
+INSERT INTO public.student_fee_history (student_id, monthly_fee, effective_from_month, teacher_id)
+SELECT 
+  id,
+  monthly_fee,
+  TO_CHAR(joining_date, 'YYYY-MM'),
+  teacher_id
+FROM public.students
+WHERE id NOT IN (SELECT DISTINCT student_id FROM public.student_fee_history);
+
+-- Index for performance
+CREATE INDEX idx_fee_history_student_month ON public.student_fee_history(student_id, effective_from_month);
 ```
 
 ---
 
-## Configuration Required (Manual Step)
+## What Stays the Same
 
-You must set the **Site URL** in Supabase Auth settings to:
-
-```text
-https://piyushbusiness.lovable.app
-```
-
-**Location**: Supabase Dashboard → Authentication → URL Configuration → Site URL
-
-Additionally, add to **Redirect URLs**:
-```text
-https://piyushbusiness.lovable.app/auth/callback
-https://piyushbusiness.lovable.app/**
-```
-
-This ensures Supabase knows where to redirect after verifying the recovery token.
+- `students.monthly_fee` field remains (for display of current fee)
+- `payments` table - no changes
+- `fee_ledger` table - no schema changes
+- Pause logic - unaffected
+- PDF format - unaffected
+- All existing payment records - untouched
 
 ---
 
-## Updated Invite Flow (After Fix)
+## Example Scenario After Implementation
 
-1. Super Admin creates teacher account
-2. Edge function generates Supabase verification URL
-3. Super Admin copies and sends the link to teacher
-4. Teacher clicks link
-5. Supabase verifies token and redirects to `/auth/callback`
-6. `/auth/callback` processes session and redirects to `/set-password`
-7. Teacher sets password
-8. Redirect to `/dashboard`
+**Student: Rahul**
+- Joined: January 2025
+- Initial fee: ₹1500
+- Fee changed to ₹2000 on February 7, 2026
+
+**Fee History Table:**
+| effective_from_month | monthly_fee |
+|---------------------|-------------|
+| 2025-01 | ₹1500 |
+| 2026-02 | ₹2000 |
+
+**Due Calculation (as of Feb 7, 2026):**
+- Jan 2025: ₹1500 ✓
+- Feb 2025: ₹1500 ✓
+- ... (all 2025 months at ₹1500)
+- Jan 2026: ₹1500 ✓
+- Feb 2026: Not due yet (current month)
+
+**Total Payable:** 13 months × ₹1500 = ₹19,500
+
+When March 2026 comes:
+- Feb 2026 becomes due at ₹2000 (the new rate)
+- Total: ₹19,500 + ₹2000 = ₹21,500
 
 ---
 
-## Security Notes
+## Technical Notes
 
-- `/auth/callback` - Public route (needs to process redirects)
-- `/set-password` - Requires authenticated session (checks in component)
-- No changes to existing role-based access control
-- No changes to RLS policies
+### Fee Lookup Algorithm
+```text
+getApplicableFee(targetMonth, feeHistory):
+  1. Filter feeHistory where effective_from_month ≤ targetMonth
+  2. Sort by effective_from_month descending
+  3. Return the first entry's monthly_fee
+  4. If no entries, throw error (shouldn't happen with proper data)
+```
+
+### Type Definition
+```typescript
+type FeeHistoryEntry = {
+  id: string;
+  student_id: string;
+  monthly_fee: number;
+  effective_from_month: string; // YYYY-MM
+  created_at: string;
+  teacher_id: string | null;
+};
+```
+
+### Calculation Flow
+```text
+1. Load student data
+2. Load fee history for student
+3. For each month from joining to (current - 1):
+   a. Skip if paused
+   b. Find applicable fee for that month
+   c. Add to total
+4. Total payable = sum of all month fees
+5. Total due = Total payable - Total paid
+```
+
+---
+
+## Testing Checklist
+
+After implementation, verify:
+1. New student creation adds fee history entry
+2. Editing fee creates new history entry (doesn't modify old)
+3. Dashboard shows correct dues for students with fee changes
+4. Student profile shows correct totals
+5. Fee timeline displays correct amounts per month
+6. PDF receipts show correct pending amounts
+7. Existing students (without explicit history) work correctly via backfill
