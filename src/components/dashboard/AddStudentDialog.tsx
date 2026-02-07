@@ -8,6 +8,7 @@ import { Plus, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { studentSchema } from "@/lib/validation";
+import { insertInitialFeeHistory } from "@/lib/feeHistoryCalculation";
 
 export const AddStudentDialog = () => {
   const { toast } = useToast();
@@ -120,6 +121,14 @@ export const AddStudentDialog = () => {
       }).select().single();
 
       if (error) throw error;
+
+      // Insert initial fee history entry
+      await insertInitialFeeHistory(
+        newStudent.id,
+        validationResult.data.monthly_fee,
+        new Date(validationResult.data.joining_date),
+        user.id
+      );
 
       toast({
         title: "Success",

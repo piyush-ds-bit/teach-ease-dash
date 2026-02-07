@@ -1,4 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
+import {
+  FeeHistoryEntry,
+  getFeeHistory,
+  getApplicableFee,
+  calculateTotalPayableWithHistory,
+  getChargeableMonthsWithFees,
+  getPartialDueInfoWithHistory,
+} from "@/lib/feeHistoryCalculation";
 
 /**
  * BUSINESS RULES (LOCKED):
@@ -6,10 +14,12 @@ import { supabase } from "@/integrations/supabase/client";
  * - Current month is NEVER due
  * - Paused months do not generate fees
  * - Payments settle earliest months first
+ * - Fee changes apply from current month forward (not retroactive)
  */
 
 /**
- * Calculate total payable amount till now
+ * Calculate total payable amount till now (LEGACY - uses single fee)
+ * @deprecated Use calculateTotalPayableWithHistory for accurate multi-fee calculation
  */
 export const calculateTotalPayable = (
   joiningDate: Date,
@@ -86,7 +96,8 @@ export type PartialDueInfo = {
 };
 
 /**
- * CORE LOGIC — THIS FIXES YOUR ISSUE
+ * CORE LOGIC for partial due (LEGACY - single fee)
+ * @deprecated Use getPartialDueInfoWithHistory for accurate multi-fee calculation
  */
 export const getPartialDueInfo = (
   totalDue: number,
@@ -138,43 +149,77 @@ export const calculateTotalPaidFromPayments = (
 };
 
 /**
- * SINGLE SOURCE OF TRUTH
+ * SINGLE SOURCE OF TRUTH - Now with fee history support
  */
 export const getStudentFeeData = async (studentId: string) => {
-  const [studentResult, paymentsResult] = await Promise.all([
+  const [studentResult, paymentsResult, feeHistoryResult] = await Promise.all([
     supabase.from("students").select("*").eq("id", studentId).single(),
     supabase.from("payments").select("amount_paid").eq("student_id", studentId),
+    getFeeHistory(studentId),
   ]);
 
   if (!studentResult.data) return null;
 
   const student = studentResult.data;
   const payments = paymentsResult.data || [];
+  const feeHistory = feeHistoryResult;
 
   const joiningDate = new Date(student.joining_date);
   const pausedMonths = student.paused_months || [];
-  const monthlyFee = Number(student.monthly_fee);
+  const monthlyFee = Number(student.monthly_fee); // Current fee for display
 
-  const totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
+  // Use fee history for accurate calculation if available
+  let totalPayable: number;
+  let chargeableMonthsWithFees: { monthKey: string; fee: number }[] = [];
+
+  if (feeHistory.length > 0) {
+    totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths);
+    chargeableMonthsWithFees = getChargeableMonthsWithFees(joiningDate, feeHistory, pausedMonths);
+  } else {
+    // Fallback to legacy calculation (shouldn't happen with proper backfill)
+    totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
+  }
+
   const totalPaid = calculateTotalPaidFromPayments(payments);
   const totalDue = Math.max(0, totalPayable - totalPaid);
 
   const chargeableMonths = getChargeableMonths(joiningDate, pausedMonths);
 
-  const partialDueInfo = getPartialDueInfo(
-    totalDue,
-    monthlyFee,
-    chargeableMonths,
-    totalPaid
-  );
+  // Use fee history for partial due if available
+  let partialDueInfo: PartialDueInfo;
+  if (feeHistory.length > 0) {
+    const historyPartialInfo = getPartialDueInfoWithHistory(
+      totalDue,
+      chargeableMonthsWithFees,
+      totalPaid
+    );
+    partialDueInfo = {
+      ...historyPartialInfo,
+      fullDueMonths: historyPartialInfo.fullDueMonths.map(formatMonthKey),
+      partialMonth: historyPartialInfo.partialMonth ? formatMonthKey(historyPartialInfo.partialMonth) : "",
+    };
+  } else {
+    partialDueInfo = getPartialDueInfo(
+      totalDue,
+      monthlyFee,
+      chargeableMonths,
+      totalPaid
+    );
+  }
 
   return {
     student,
     payments,
+    feeHistory,
     totalPayable,
     totalPaid,
     totalDue,
     chargeableMonths: chargeableMonths.map(formatMonthKey),
+    chargeableMonthsWithFees,
     partialDueInfo,
   };
 };
+
+// Re-export fee history types and functions for convenience
+export type { FeeHistoryEntry };
+export { getFeeHistory, getApplicableFee, calculateTotalPayableWithHistory };

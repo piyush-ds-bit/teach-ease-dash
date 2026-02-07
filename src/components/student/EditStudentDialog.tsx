@@ -8,6 +8,7 @@ import { Edit, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { studentSchema } from "@/lib/validation";
+import { insertFeeHistoryChange } from "@/lib/feeHistoryCalculation";
 
 type Student = {
   id: string;
@@ -143,6 +144,9 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
         photoUrl = signedUrlData?.signedUrl || null;
       }
 
+      // Check if monthly fee has changed
+      const feeChanged = validationResult.data.monthly_fee !== student.monthly_fee;
+
       const { error } = await supabase
         .from("students")
         .update({
@@ -158,6 +162,18 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
         .eq("id", student.id);
 
       if (error) throw error;
+
+      // If fee changed, insert new fee history entry for current month
+      if (feeChanged) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await insertFeeHistoryChange(
+            student.id,
+            validationResult.data.monthly_fee,
+            user.id
+          );
+        }
+      }
 
       toast({
         title: "Success",

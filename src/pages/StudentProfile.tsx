@@ -19,7 +19,13 @@ import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
 import { CopyFeeReminderButton } from "@/components/student/CopyFeeReminderButton";
 import { useLedger } from "@/hooks/useLedger";
 import { getStudentStatusFromData } from "@/lib/statusCalculation";
-import { calculateTotalPayable, calculateTotalPaidFromPayments, getChargeableMonths, formatMonthKey } from "@/lib/feeCalculation";
+import { calculateTotalPaidFromPayments, getChargeableMonths, formatMonthKey } from "@/lib/feeCalculation";
+import {
+  FeeHistoryEntry,
+  getFeeHistory,
+  calculateTotalPayableWithHistory,
+  dateToMonthKey,
+} from "@/lib/feeHistoryCalculation";
 
 type Student = {
   id: string;
@@ -52,6 +58,7 @@ const StudentProfile = () => {
   const navigate = useNavigate();
   const [student, setStudent] = useState<Student | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [feeHistory, setFeeHistory] = useState<FeeHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
 
@@ -79,6 +86,7 @@ const StudentProfile = () => {
     joiningDate: student ? new Date(student.joining_date) : undefined,
     monthlyFee: student?.monthly_fee,
     pausedMonths: student?.paused_months || [],
+    feeHistory: feeHistory,
     autoSync: !!student,
   });
 
@@ -129,23 +137,40 @@ const StudentProfile = () => {
   };
 
   const loadData = async () => {
-    const [studentResult, paymentsResult] = await Promise.all([
+    const [studentResult, paymentsResult, feeHistoryResult] = await Promise.all([
       supabase.from("students").select("*").eq("id", id).single(),
-      supabase.from("payments").select("*").eq("student_id", id)
+      supabase.from("payments").select("*").eq("student_id", id),
+      getFeeHistory(id || ''),
     ]);
     
     if (studentResult.data) {
       setStudent(studentResult.data);
+      setFeeHistory(feeHistoryResult);
       
-      // Calculate fee data directly from source tables
+      // Calculate fee data using fee history
       const studentData = studentResult.data;
       const paymentsData = paymentsResult.data || [];
       
       const joiningDate = new Date(studentData.joining_date);
       const pausedMonths = studentData.paused_months || [];
-      const monthlyFee = Number(studentData.monthly_fee);
       
-      const totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
+      // Use fee history for accurate calculation
+      let totalPayable: number;
+      if (feeHistoryResult.length > 0) {
+        totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistoryResult, pausedMonths);
+      } else {
+        // Fallback: create synthetic history from current fee
+        const syntheticHistory: FeeHistoryEntry[] = [{
+          id: 'synthetic',
+          student_id: studentData.id,
+          monthly_fee: Number(studentData.monthly_fee),
+          effective_from_month: dateToMonthKey(joiningDate),
+          created_at: new Date().toISOString(),
+          teacher_id: null,
+        }];
+        totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths);
+      }
+      
       const totalPaid = calculateTotalPaidFromPayments(paymentsData);
       const totalDue = Math.max(0, totalPayable - totalPaid);
       const pendingMonths = getChargeableMonths(joiningDate, pausedMonths);

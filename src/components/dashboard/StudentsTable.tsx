@@ -7,8 +7,12 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Search, User } from "lucide-react";
 import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
-import { calculateTotalPayable } from "@/lib/feeCalculation";
 import { getStudentStatusFromData } from "@/lib/statusCalculation";
+import {
+  FeeHistoryEntry,
+  calculateTotalPayableWithHistory,
+  dateToMonthKey,
+} from "@/lib/feeHistoryCalculation";
 
 type Student = {
   id: string;
@@ -22,6 +26,7 @@ type Student = {
   paused_months: string[] | null;
   total_paid?: number;
   last_payment_date?: string | null;
+  fee_history?: FeeHistoryEntry[];
 };
 
 export const StudentsTable = () => {
@@ -70,17 +75,14 @@ export const StudentsTable = () => {
   }, []);
 
   const loadStudents = async () => {
-    const { data: studentsData } = await supabase
-      .from("students")
-      .select("*")
-      .order("name");
+    const [studentsData, paymentsData, feeHistoryData] = await Promise.all([
+      supabase.from("students").select("*").order("name"),
+      supabase.from("payments").select("student_id, amount_paid, payment_date"),
+      supabase.from("student_fee_history").select("*").order("effective_from_month"),
+    ]);
     
-    const { data: paymentsData } = await supabase
-      .from("payments")
-      .select("student_id, amount_paid, payment_date");
-    
-    const studentsWithPaymentInfo = studentsData?.map(student => {
-      const studentPayments = paymentsData?.filter(p => p.student_id === student.id) || [];
+    const studentsWithPaymentInfo = studentsData.data?.map(student => {
+      const studentPayments = paymentsData.data?.filter(p => p.student_id === student.id) || [];
       const total_paid = studentPayments.reduce((sum, p) => sum + Number(p.amount_paid), 0);
       
       // Find most recent payment date
@@ -88,8 +90,13 @@ export const StudentsTable = () => {
         (a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()
       );
       const last_payment_date = sortedPayments[0]?.payment_date || null;
+
+      // Get fee history for this student
+      const studentFeeHistory = feeHistoryData.data?.filter(
+        (fh) => fh.student_id === student.id
+      ) as FeeHistoryEntry[] || [];
       
-      return { ...student, total_paid, last_payment_date };
+      return { ...student, total_paid, last_payment_date, fee_history: studentFeeHistory };
     }) || [];
     
     setStudents(studentsWithPaymentInfo);
@@ -99,10 +106,25 @@ export const StudentsTable = () => {
   const calculateDue = (student: Student) => {
     const joiningDate = new Date(student.joining_date);
     const pausedMonths = student.paused_months || [];
-    const monthlyFee = Number(student.monthly_fee);
+    const feeHistory = student.fee_history || [];
     const totalPaid = student.total_paid || 0;
-    
-    const totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
+
+    // Use fee history if available, otherwise fallback to legacy
+    if (feeHistory.length > 0) {
+      const totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths);
+      return Math.max(0, totalPayable - totalPaid);
+    }
+
+    // Fallback: Create synthetic fee history from current monthly fee
+    const syntheticHistory: FeeHistoryEntry[] = [{
+      id: 'synthetic',
+      student_id: student.id,
+      monthly_fee: Number(student.monthly_fee),
+      effective_from_month: dateToMonthKey(joiningDate),
+      created_at: new Date().toISOString(),
+      teacher_id: null,
+    }];
+    const totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths);
     return Math.max(0, totalPayable - totalPaid);
   };
 
