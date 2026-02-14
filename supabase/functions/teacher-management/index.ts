@@ -101,9 +101,9 @@ Deno.serve(async (req: Request) => {
         );
     }
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Teacher management error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
+      JSON.stringify({ error: 'An unexpected error occurred. Please try again.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -117,9 +117,25 @@ async function createTeacher(
 ) {
   const { email, full_name, phone } = payload;
 
-  if (!email || !full_name) {
+  // Input validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || typeof email !== 'string' || !emailRegex.test(email) || email.length > 320) {
     return new Response(
-      JSON.stringify({ error: 'Email and full name are required' }),
+      JSON.stringify({ error: 'Invalid email format' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  if (!full_name || typeof full_name !== 'string' || full_name.trim().length < 2 || full_name.length > 100) {
+    return new Response(
+      JSON.stringify({ error: 'Name must be between 2 and 100 characters' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  if (phone !== undefined && phone !== null && (typeof phone !== 'string' || phone.length > 20)) {
+    return new Response(
+      JSON.stringify({ error: 'Phone number must be 20 characters or less' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -152,10 +168,7 @@ async function createTeacher(
   if (linkError) {
     console.error('Invite link generation failed:', JSON.stringify(linkError, null, 2));
     return new Response(
-      JSON.stringify({ 
-        error: `Failed to generate invite: ${linkError.message}`,
-        details: linkError
-      }),
+      JSON.stringify({ error: 'Failed to generate invite. Please try again.' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -186,7 +199,7 @@ async function createTeacher(
     console.error('Teacher insert failed:', teacherError);
     await supabaseAdmin.auth.admin.deleteUser(userId);
     return new Response(
-      JSON.stringify({ error: teacherError.message }),
+      JSON.stringify({ error: 'Failed to create teacher record. Please try again.' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -223,9 +236,16 @@ async function updateTeacherStatus(
 ) {
   const { teacher_user_id, status } = payload;
 
-  if (!teacher_user_id || !status) {
+  if (!teacher_user_id || typeof teacher_user_id !== 'string' || !status) {
     return new Response(
       JSON.stringify({ error: 'Teacher user ID and status are required' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  if (!['active', 'suspended'].includes(status)) {
+    return new Response(
+      JSON.stringify({ error: 'Invalid status value' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -237,8 +257,9 @@ async function updateTeacherStatus(
     .eq('user_id', teacher_user_id);
 
   if (updateError) {
+    console.error('Teacher status update failed:', updateError);
     return new Response(
-      JSON.stringify({ error: updateError.message }),
+      JSON.stringify({ error: 'Failed to update teacher status. Please try again.' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
