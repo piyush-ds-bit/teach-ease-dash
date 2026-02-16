@@ -1,283 +1,177 @@
 
-# Fee History Tracking Implementation Plan
 
-## Overview
+# Fix Production Performance, Fee Timeline, and Receipt Issues
 
-This plan fixes the issue where changing a student's monthly fee incorrectly applies the new rate to all past months. After implementation, fee changes will only affect the current month and future months, while past dues remain calculated at their original rates.
+## Problems Identified
 
----
+### 1. Slow Loading / Infinite Loading in Production
 
-## What's Changing
+**Root Causes:**
 
-When you update a student's fee from ₹1500 to ₹2000:
-- **Before**: All months (Jan to present) incorrectly show ₹2000 each
-- **After**: Jan-Apr remain at ₹1500, May onward at ₹2000
+- **ProtectedAdminRoute** makes 3 sequential RPC calls (`has_role` x3) plus a teacher status check on EVERY page load -- 4 round trips before any content renders
+- **StudentsTable** fetches ALL columns from `students`, `payments`, and `student_fee_history` tables (no column filtering)
+- **DashboardStats** also fetches `students.*` and `payments.*` (full table scans with all columns)
+- **useLedger hook** has unstable `useCallback` dependencies (`pausedMonths` and `feeHistory` are arrays that change reference on every render), causing infinite re-sync loops
+- No try/catch in `loadStudents()` or `loadData()` -- any error causes permanent loading state
+- Missing database indexes on frequently queried columns
 
----
+### 2. Fee Timeline Never Displays
 
-## Implementation Steps
+**Root Cause:**
 
-### Step 1: Create Fee History Table
+- The `useLedger` hook's `syncLedger` dependency array includes `pausedMonths` and `feeHistory` which are new array references on every render
+- This causes `syncLedger` to be recreated every render, which triggers the `useEffect` to re-run, creating an infinite loop of loading states
+- The `autoSync` condition depends on `student` being loaded, but by the time student loads, the dependency array has already changed, causing repeated re-renders
+- Meanwhile `fullLedgerSync` calls `supabase.auth.getUser()` internally (another round-trip per call), compounding the problem
 
-Create a new database table `student_fee_history` to track fee changes:
+### 3. Receipt Shows "Partial Fees Due" Incorrectly
 
-| Column | Type | Purpose |
-|--------|------|---------|
-| id | uuid | Primary key |
-| student_id | uuid | Links to students table |
-| monthly_fee | numeric | Fee amount for this period |
-| effective_from_month | text | YYYY-MM format when fee starts |
-| created_at | timestamp | When record was created |
-| teacher_id | uuid | For data isolation |
+**Root Cause:**
 
-Add RLS policies matching the students table pattern.
-
-### Step 2: Backward Compatibility Migration
-
-Run a one-time data migration to create fee history for all existing students:
-- For each student without fee history
-- Create one entry using their current `monthly_fee`
-- Set `effective_from_month` to their joining month
-
-This ensures existing data continues to work correctly.
-
-### Step 3: Update Student Creation Flow
-
-Modify `AddStudentDialog.tsx`:
-- After creating the student record
-- Insert initial fee history entry with `effective_from_month` = joining month
-
-### Step 4: Update Fee Edit Flow
-
-Modify `EditStudentDialog.tsx`:
-- When monthly fee changes
-- Insert a **new** fee history entry with `effective_from_month` = current month (YYYY-MM)
-- Continue updating `students.monthly_fee` for display purposes
-- Do NOT modify past fee history entries
-
-### Step 5: Create Fee History Helper Functions
-
-Create new file `src/lib/feeHistoryCalculation.ts`:
-
-```text
-Functions to implement:
-├── getFeeForMonth(studentId, monthKey) → Returns applicable fee for a specific month
-├── getFeeHistory(studentId) → Returns all fee history entries
-├── calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths) → Calculates total using correct fees per month
-└── getApplicableFee(monthKey, feeHistory) → Finds fee that was active for a given month
-```
-
-**Core Logic:**
-For each month from joining to now:
-1. Find the fee history entry where `effective_from_month ≤ month`
-2. Use the most recent such entry (latest effective date that hasn't passed the month)
-3. Skip paused months
-4. Sum all applicable fees
-
-### Step 6: Update Fee Calculation Functions
-
-Modify `src/lib/feeCalculation.ts`:
-
-**calculateTotalPayable()** - Update to accept fee history array:
-```text
-Before: calculateTotalPayable(joiningDate, monthlyFee, pausedMonths)
-After:  calculateTotalPayable(joiningDate, feeHistory, pausedMonths)
-
-Logic change:
-- Instead of count × monthlyFee
-- Sum each month's individual fee based on what was active that month
-```
-
-**getStudentFeeData()** - Fetch and include fee history:
-```text
-- Add query to fetch student_fee_history
-- Pass fee history to calculation functions
-- Return fee history in response for UI use
-```
-
-### Step 7: Update Ledger Generation
-
-Modify `src/lib/ledgerCalculation.ts`:
-
-**generateFeeEntries()** - Use correct fee per month:
-```text
-Before: All entries use same monthlyFee
-After:  Each entry uses the fee that was active for that specific month
-```
-
-### Step 8: Update Component Fee Calculations
-
-**StudentsTable.tsx:**
-- Fetch fee history for each student
-- Pass to updated calculateTotalPayable()
-
-**StudentProfile.tsx:**
-- Fetch fee history
-- Use in all due calculations
-
-**FeeTimeline.tsx:**
-- No changes needed (already uses ledger entries with amounts)
-
-### Step 9: Update PDF Generation
-
-**pdfGenerator.ts:**
-- Partial due calculations will automatically use correct amounts
-- No structural changes needed since it receives pendingMonths and totalDue as inputs
+- In `pdfGenerator.ts` line 202-204, the receipt calculates: `totalPayable = data.pendingMonths.length * data.monthlyFee` and then `totalPaid = Math.max(0, totalPayable - data.totalDue)`
+- This is circular and wrong -- it estimates totalPaid from pendingMonths count times a single fee, ignoring fee history
+- When a student has fully paid but `pendingMonths` still includes months (because `getChargeableMonths` returns ALL chargeable months, not just unpaid ones), the partial due calculation produces incorrect results
+- The `GenerateReceiptButton` passes `pendingMonths` from `getChargeableMonths()` which includes ALL months from joining to now (not just unpaid ones)
 
 ---
 
-## Files to Create
+## Implementation Plan
 
-| File | Purpose |
-|------|---------|
-| `src/lib/feeHistoryCalculation.ts` | New helper functions for fee history |
+### Step 1: Add Database Indexes
+
+Add indexes to speed up all queries:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_payments_student_id ON public.payments(student_id);
+CREATE INDEX IF NOT EXISTS idx_payments_teacher_id ON public.payments(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_fee_ledger_student_id ON public.fee_ledger(student_id);
+CREATE INDEX IF NOT EXISTS idx_fee_ledger_teacher_id ON public.fee_ledger(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_fee_ledger_student_type ON public.fee_ledger(student_id, entry_type);
+CREATE INDEX IF NOT EXISTS idx_students_teacher_id ON public.students(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_homework_student_id ON public.homework(student_id);
+CREATE INDEX IF NOT EXISTS idx_homework_teacher_id ON public.homework(teacher_id);
+```
+
+### Step 2: Fix ProtectedAdminRoute -- Reduce Auth Round Trips
+
+**File:** `src/components/admin/ProtectedAdminRoute.tsx`
+
+Instead of 3 separate `has_role` RPC calls, fetch user_roles directly with a single query:
+
+```
+Before: 3 RPC calls (has_role for teacher, admin, super_admin)
+After:  1 SELECT from user_roles where user_id = session.user.id
+```
+
+This cuts auth check from ~4 round trips to ~2 (getSession + single query).
+
+### Step 3: Fix useLedger Infinite Loop
+
+**File:** `src/hooks/useLedger.ts`
+
+- Stabilize `pausedMonths` and `feeHistory` references using `JSON.stringify` comparison
+- Separate the initial sync from re-renders using a ref to track if initial sync has been done
+- Add try/catch with proper error states
+- Prevent loading state from getting stuck
+
+```
+Key change: 
+- Use useRef to store serialized versions of pausedMonths/feeHistory
+- Only trigger sync when serialized values actually change
+- Add timeout protection for loading states
+```
+
+### Step 4: Fix StudentsTable Loading -- Add Error Handling and Column Selection
+
+**File:** `src/components/dashboard/StudentsTable.tsx`
+
+- Wrap `loadStudents()` in try/catch so errors don't cause permanent loading
+- Select only needed columns instead of `*`
+- Add error state display instead of infinite spinner
+
+### Step 5: Fix DashboardStats -- Optimize Queries
+
+**File:** `src/components/dashboard/DashboardStats.tsx`
+
+- Select only needed columns: `students(id, monthly_fee)` and `payments(amount_paid, month)`
+- Wrap in try/catch
+
+### Step 6: Fix StudentProfile Loading
+
+**File:** `src/pages/StudentProfile.tsx`
+
+- Wrap `loadData()` in try/catch to prevent permanent loading state
+- Ensure `setLoading(false)` always runs (move to finally block)
+
+### Step 7: Fix Receipt "Partial Fees Due" Logic
+
+**File:** `src/lib/pdfGenerator.ts`
+
+The core problem: the receipt recalculates partial due using `pendingMonths.length * monthlyFee` which is wrong with fee history.
+
+Fix:
+- Pass `totalPaid` directly to the receipt (already available from StudentProfile)
+- Pass fee history data or the pre-calculated `partialDueInfo` from `getStudentFeeData()`
+- Remove the incorrect re-derivation of totalPaid inside pdfGenerator
+
+**File:** `src/components/student/GenerateReceiptButton.tsx`
+
+- Add `totalPaid` and `feeHistory` props
+- Pass these to `generateReceipt()`
+
+**File:** `src/pages/StudentProfile.tsx`
+
+- Pass `totalPaid` and fee history to `GenerateReceiptButton`
+
+**Updated receipt logic:**
+```
+Before (wrong):
+  totalPayable = pendingMonths.length * monthlyFee
+  totalPaid = totalPayable - totalDue
+  partialDueInfo = getPartialDueInfo(totalDue, monthlyFee, pendingMonths, totalPaid)
+
+After (correct):
+  Use pre-calculated partialDueInfo from getStudentFeeData()
+  OR use getPartialDueInfoWithHistory() with actual fee history data
+  Only show "Partial" if there is genuinely a partial payment for a month
+```
+
+### Step 8: Fix Pending Months Passed to Receipt
+
+**File:** `src/pages/StudentProfile.tsx`
+
+Currently passes ALL chargeable months to the receipt. Should only pass UNPAID months.
+
+```
+Before: pendingMonths = getChargeableMonths(joiningDate, pausedMonths) // ALL months
+After:  Calculate actual unpaid months using fee history and payments
+```
+
+---
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `src/lib/feeCalculation.ts` | Update functions to use fee history |
-| `src/lib/ledgerCalculation.ts` | Use correct fee per month when generating entries |
-| `src/components/dashboard/AddStudentDialog.tsx` | Insert initial fee history on creation |
-| `src/components/student/EditStudentDialog.tsx` | Insert new fee history on fee change |
-| `src/components/dashboard/StudentsTable.tsx` | Fetch and use fee history |
-| `src/pages/StudentProfile.tsx` | Fetch and use fee history |
-| `src/hooks/useLedger.ts` | Pass fee history to sync function |
+| File | Change |
+|------|--------|
+| `src/components/admin/ProtectedAdminRoute.tsx` | Single query instead of 3 RPCs |
+| `src/hooks/useLedger.ts` | Fix infinite loop, stabilize deps, add error handling |
+| `src/components/dashboard/StudentsTable.tsx` | Add try/catch, select fewer columns |
+| `src/components/dashboard/DashboardStats.tsx` | Add try/catch, select fewer columns |
+| `src/pages/StudentProfile.tsx` | Add try/catch, fix pendingMonths, pass correct data to receipt |
+| `src/lib/pdfGenerator.ts` | Fix partial due calculation to use pre-calculated data |
+| `src/components/student/GenerateReceiptButton.tsx` | Accept totalPaid and partialDueInfo props |
+
+## Database Migration
+
+One new migration to add indexes on key columns.
 
 ---
 
-## Database Migration SQL
+## Expected Results After Fix
 
-```sql
--- Create fee history table
-CREATE TABLE public.student_fee_history (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
-  monthly_fee numeric NOT NULL,
-  effective_from_month text NOT NULL, -- Format: YYYY-MM
-  created_at timestamptz NOT NULL DEFAULT now(),
-  teacher_id uuid,
-  
-  -- Ensure one fee per effective month per student
-  UNIQUE(student_id, effective_from_month)
-);
+- Dashboard loads in 1-2 seconds (fewer round trips, indexed queries)
+- Fee Timeline displays correctly (no infinite re-render loop)
+- Receipt never shows "Partial Fees Due" when student is fully paid
+- No infinite loading spinners (all async operations have try/catch/finally)
+- Error states shown instead of permanent spinners when queries fail
 
--- Enable RLS
-ALTER TABLE public.student_fee_history ENABLE ROW LEVEL SECURITY;
-
--- RLS policies (same pattern as students table)
-CREATE POLICY "Teachers/admins can view own fee history"
-  ON public.student_fee_history FOR SELECT
-  USING (
-    (teacher_id = auth.uid() AND (has_role(auth.uid(), 'teacher') OR has_role(auth.uid(), 'admin')))
-    OR has_role(auth.uid(), 'admin')
-  );
-
-CREATE POLICY "Teachers/admins can insert own fee history"
-  ON public.student_fee_history FOR INSERT
-  WITH CHECK (
-    teacher_id = auth.uid() AND (has_role(auth.uid(), 'teacher') OR has_role(auth.uid(), 'admin'))
-  );
-
--- Backfill existing students
-INSERT INTO public.student_fee_history (student_id, monthly_fee, effective_from_month, teacher_id)
-SELECT 
-  id,
-  monthly_fee,
-  TO_CHAR(joining_date, 'YYYY-MM'),
-  teacher_id
-FROM public.students
-WHERE id NOT IN (SELECT DISTINCT student_id FROM public.student_fee_history);
-
--- Index for performance
-CREATE INDEX idx_fee_history_student_month ON public.student_fee_history(student_id, effective_from_month);
-```
-
----
-
-## What Stays the Same
-
-- `students.monthly_fee` field remains (for display of current fee)
-- `payments` table - no changes
-- `fee_ledger` table - no schema changes
-- Pause logic - unaffected
-- PDF format - unaffected
-- All existing payment records - untouched
-
----
-
-## Example Scenario After Implementation
-
-**Student: Rahul**
-- Joined: January 2025
-- Initial fee: ₹1500
-- Fee changed to ₹2000 on February 7, 2026
-
-**Fee History Table:**
-| effective_from_month | monthly_fee |
-|---------------------|-------------|
-| 2025-01 | ₹1500 |
-| 2026-02 | ₹2000 |
-
-**Due Calculation (as of Feb 7, 2026):**
-- Jan 2025: ₹1500 ✓
-- Feb 2025: ₹1500 ✓
-- ... (all 2025 months at ₹1500)
-- Jan 2026: ₹1500 ✓
-- Feb 2026: Not due yet (current month)
-
-**Total Payable:** 13 months × ₹1500 = ₹19,500
-
-When March 2026 comes:
-- Feb 2026 becomes due at ₹2000 (the new rate)
-- Total: ₹19,500 + ₹2000 = ₹21,500
-
----
-
-## Technical Notes
-
-### Fee Lookup Algorithm
-```text
-getApplicableFee(targetMonth, feeHistory):
-  1. Filter feeHistory where effective_from_month ≤ targetMonth
-  2. Sort by effective_from_month descending
-  3. Return the first entry's monthly_fee
-  4. If no entries, throw error (shouldn't happen with proper data)
-```
-
-### Type Definition
-```typescript
-type FeeHistoryEntry = {
-  id: string;
-  student_id: string;
-  monthly_fee: number;
-  effective_from_month: string; // YYYY-MM
-  created_at: string;
-  teacher_id: string | null;
-};
-```
-
-### Calculation Flow
-```text
-1. Load student data
-2. Load fee history for student
-3. For each month from joining to (current - 1):
-   a. Skip if paused
-   b. Find applicable fee for that month
-   c. Add to total
-4. Total payable = sum of all month fees
-5. Total due = Total payable - Total paid
-```
-
----
-
-## Testing Checklist
-
-After implementation, verify:
-1. New student creation adds fee history entry
-2. Editing fee creates new history entry (doesn't modify old)
-3. Dashboard shows correct dues for students with fee changes
-4. Student profile shows correct totals
-5. Fee timeline displays correct amounts per month
-6. PDF receipts show correct pending amounts
-7. Existing students (without explicit history) work correctly via backfill
