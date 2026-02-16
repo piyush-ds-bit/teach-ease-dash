@@ -2,17 +2,20 @@ import { Button } from "@/components/ui/button";
 import { FileText } from "lucide-react";
 import { generateReceipt, ReceiptData } from "@/lib/pdfGenerator";
 import { toast } from "sonner";
+import { FeeHistoryEntry } from "@/lib/feeHistoryCalculation";
 
 type GenerateReceiptButtonProps = {
   studentName: string;
   studentId: string;
   monthlyFee: number;
   totalDue: number;
+  totalPaid: number;
   joiningDate: string;
   pendingMonths: string[];
   subject?: string | null;
   profilePhotoUrl?: string | null;
   pausedMonths?: string[];
+  feeHistory?: FeeHistoryEntry[];
 };
 
 export const GenerateReceiptButton = ({
@@ -20,11 +23,13 @@ export const GenerateReceiptButton = ({
   studentId,
   monthlyFee,
   totalDue,
+  totalPaid,
   joiningDate,
   pendingMonths,
   subject,
   profilePhotoUrl,
   pausedMonths,
+  feeHistory,
 }: GenerateReceiptButtonProps) => {
   const handleGenerateReceipt = async () => {
     try {
@@ -34,10 +39,12 @@ export const GenerateReceiptButton = ({
         monthlyFee,
         pendingMonths,
         totalDue,
+        totalPaid,
         joiningDate,
         subject,
         profilePhotoUrl,
         pausedMonths,
+        feeHistory,
       };
 
       await generateReceipt(receiptData);

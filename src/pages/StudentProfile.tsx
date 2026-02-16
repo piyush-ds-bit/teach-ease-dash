@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ import {
   getFeeHistory,
   calculateTotalPayableWithHistory,
   dateToMonthKey,
+  getChargeableMonthsWithFees,
+  getPartialDueInfoWithHistory,
 } from "@/lib/feeHistoryCalculation";
 
 type Student = {
@@ -51,6 +53,7 @@ interface FeeData {
   totalPaid: number;
   totalDue: number;
   pendingMonths: string[];
+  unpaidMonths: string[];
 }
 
 const StudentProfile = () => {
@@ -67,6 +70,7 @@ const StudentProfile = () => {
     totalPaid: 0,
     totalDue: 0,
     pendingMonths: [],
+    unpaidMonths: [],
   });
 
   const [cardVisibility, setCardVisibility] = useState({
@@ -118,88 +122,100 @@ const StudentProfile = () => {
   }, [id]);
 
   const loadPreferences = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
-        .from('user_preferences')
-        .select('profile_cards_visible')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      if (data?.profile_cards_visible) {
-        setCardVisibility({
-          monthlyFee: false,
-          totalPaid: false,
-          totalDue: false,
-        });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('user_preferences')
+          .select('profile_cards_visible')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (data?.profile_cards_visible) {
+          setCardVisibility({ monthlyFee: false, totalPaid: false, totalDue: false });
+        }
       }
+    } catch (err) {
+      console.error("Error loading preferences:", err);
     }
   };
 
   const loadData = async () => {
-    const [studentResult, paymentsResult, feeHistoryResult] = await Promise.all([
-      supabase.from("students").select("*").eq("id", id).single(),
-      supabase.from("payments").select("*").eq("student_id", id),
-      getFeeHistory(id || ''),
-    ]);
-    
-    if (studentResult.data) {
-      setStudent(studentResult.data);
-      setFeeHistory(feeHistoryResult);
+    try {
+      const [studentResult, paymentsResult, feeHistoryResult] = await Promise.all([
+        supabase.from("students").select("*").eq("id", id).single(),
+        supabase.from("payments").select("*").eq("student_id", id),
+        getFeeHistory(id || ''),
+      ]);
       
-      // Calculate fee data using fee history
-      const studentData = studentResult.data;
-      const paymentsData = paymentsResult.data || [];
-      
-      const joiningDate = new Date(studentData.joining_date);
-      const pausedMonths = studentData.paused_months || [];
-      
-      // Use fee history for accurate calculation
-      let totalPayable: number;
-      if (feeHistoryResult.length > 0) {
-        totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistoryResult, pausedMonths);
-      } else {
-        // Fallback: create synthetic history from current fee
-        const syntheticHistory: FeeHistoryEntry[] = [{
-          id: 'synthetic',
-          student_id: studentData.id,
-          monthly_fee: Number(studentData.monthly_fee),
-          effective_from_month: dateToMonthKey(joiningDate),
-          created_at: new Date().toISOString(),
-          teacher_id: null,
-        }];
-        totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths);
+      if (studentResult.data) {
+        setStudent(studentResult.data);
+        setFeeHistory(feeHistoryResult);
+        
+        const studentData = studentResult.data;
+        const paymentsData = paymentsResult.data || [];
+        
+        const joiningDate = new Date(studentData.joining_date);
+        const pausedMonths = studentData.paused_months || [];
+        
+        // Use fee history for accurate calculation
+        let totalPayable: number;
+        let chargeableWithFees: { monthKey: string; fee: number }[] = [];
+        
+        if (feeHistoryResult.length > 0) {
+          totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistoryResult, pausedMonths);
+          chargeableWithFees = getChargeableMonthsWithFees(joiningDate, feeHistoryResult, pausedMonths);
+        } else {
+          const syntheticHistory: FeeHistoryEntry[] = [{
+            id: 'synthetic',
+            student_id: studentData.id,
+            monthly_fee: Number(studentData.monthly_fee),
+            effective_from_month: dateToMonthKey(joiningDate),
+            created_at: new Date().toISOString(),
+            teacher_id: null,
+          }];
+          totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths);
+          chargeableWithFees = getChargeableMonthsWithFees(joiningDate, syntheticHistory, pausedMonths);
+        }
+        
+        const totalPaid = calculateTotalPaidFromPayments(paymentsData);
+        const totalDue = Math.max(0, totalPayable - totalPaid);
+        const pendingMonths = getChargeableMonths(joiningDate, pausedMonths);
+        
+        // Calculate actual unpaid months for receipt
+        const partialInfo = getPartialDueInfoWithHistory(totalDue, chargeableWithFees, totalPaid);
+        const unpaidMonths = [
+          ...partialInfo.fullDueMonths,
+          ...(partialInfo.isPartial && partialInfo.partialMonth ? [partialInfo.partialMonth] : []),
+        ];
+        
+        setFeeData({
+          totalPayable,
+          totalPaid,
+          totalDue,
+          pendingMonths,
+          unpaidMonths,
+        });
       }
       
-      const totalPaid = calculateTotalPaidFromPayments(paymentsData);
-      const totalDue = Math.max(0, totalPayable - totalPaid);
-      const pendingMonths = getChargeableMonths(joiningDate, pausedMonths);
-      
-      setFeeData({
-        totalPayable,
-        totalPaid,
-        totalDue,
-        pendingMonths,
-      });
+      if (paymentsResult.data) {
+        setPayments(paymentsResult.data);
+      }
+    } catch (err) {
+      console.error("Error loading student data:", err);
+    } finally {
+      setLoading(false);
     }
-    
-    if (paymentsResult.data) {
-      setPayments(paymentsResult.data);
-    }
-    
-    setLoading(false);
   };
 
   const handleDataUpdate = async () => {
     await loadData();
-    // Sync ledger for timeline display
     if (student) {
       await syncLedger();
     }
   };
 
-  // Use direct calculation from source tables for financial values
-  const { totalPaid, totalDue, pendingMonths } = feeData;
+  const { totalPaid, totalDue, pendingMonths, unpaidMonths } = feeData;
   const pendingMonthsFormatted = pendingMonths.map(formatMonthKey);
 
   if (loading) {
@@ -229,11 +245,7 @@ const StudentProfile = () => {
             onClick={() => student.profile_photo_url && setPhotoModalOpen(true)}
           >
             {student.profile_photo_url ? (
-              <img 
-                src={student.profile_photo_url} 
-                alt={student.name}
-                className="w-full h-full object-cover"
-              />
+              <img src={student.profile_photo_url} alt={student.name} className="w-full h-full object-cover" />
             ) : (
               <User className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground" />
             )}
@@ -262,11 +274,13 @@ const StudentProfile = () => {
                 studentId={student.id}
                 monthlyFee={student.monthly_fee}
                 totalDue={totalDue}
+                totalPaid={totalPaid}
                 joiningDate={student.joining_date}
-                pendingMonths={pendingMonths}
+                pendingMonths={unpaidMonths}
                 subject={student.subject}
                 profilePhotoUrl={student.profile_photo_url}
                 pausedMonths={student.paused_months || []}
+                feeHistory={feeHistory}
               />
             )}
             <EditStudentDialog student={student} onUpdate={handleDataUpdate} />
@@ -278,22 +292,10 @@ const StudentProfile = () => {
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <div className="flex items-center justify-between w-full">
-                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                  Monthly Fee
-                </CardTitle>
+                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Monthly Fee</CardTitle>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => toggleCardVisibility('monthlyFee')}
-                    aria-label="Toggle visibility"
-                  >
-                    {cardVisibility.monthlyFee ? (
-                      <Eye className="h-3 w-3" />
-                    ) : (
-                      <EyeOff className="h-3 w-3" />
-                    )}
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleCardVisibility('monthlyFee')} aria-label="Toggle visibility">
+                    {cardVisibility.monthlyFee ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                   </Button>
                   <DollarSign className="h-4 w-4 text-primary" />
                 </div>
@@ -309,22 +311,10 @@ const StudentProfile = () => {
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <div className="flex items-center justify-between w-full">
-                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                  Total Paid
-                </CardTitle>
+                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Total Paid</CardTitle>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => toggleCardVisibility('totalPaid')}
-                    aria-label="Toggle visibility"
-                  >
-                    {cardVisibility.totalPaid ? (
-                      <Eye className="h-3 w-3" />
-                    ) : (
-                      <EyeOff className="h-3 w-3" />
-                    )}
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleCardVisibility('totalPaid')} aria-label="Toggle visibility">
+                    {cardVisibility.totalPaid ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                   </Button>
                   <DollarSign className="h-4 w-4 text-success" />
                 </div>
@@ -340,22 +330,10 @@ const StudentProfile = () => {
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <div className="flex items-center justify-between w-full">
-                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                  Total Due
-                </CardTitle>
+                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Total Due</CardTitle>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => toggleCardVisibility('totalDue')}
-                    aria-label="Toggle visibility"
-                  >
-                    {cardVisibility.totalDue ? (
-                      <Eye className="h-3 w-3" />
-                    ) : (
-                      <EyeOff className="h-3 w-3" />
-                    )}
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleCardVisibility('totalDue')} aria-label="Toggle visibility">
+                    {cardVisibility.totalDue ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                   </Button>
                   <DollarSign className="h-4 w-4 text-warning" />
                 </div>
@@ -370,9 +348,7 @@ const StudentProfile = () => {
 
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-                Joining Date
-              </CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Joining Date</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -384,9 +360,7 @@ const StudentProfile = () => {
         </div>
 
         <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle>Student Details</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Student Details</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-muted-foreground" />
@@ -440,11 +414,7 @@ const StudentProfile = () => {
         {student.profile_photo_url && (
           <Dialog open={photoModalOpen} onOpenChange={setPhotoModalOpen}>
             <DialogContent className="max-w-2xl">
-              <img 
-                src={student.profile_photo_url} 
-                alt={student.name}
-                className="w-full h-auto rounded-lg"
-              />
+              <img src={student.profile_photo_url} alt={student.name} className="w-full h-auto rounded-lg" />
             </DialogContent>
           </Dialog>
         )}

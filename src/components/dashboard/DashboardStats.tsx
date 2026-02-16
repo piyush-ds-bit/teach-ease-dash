@@ -23,7 +23,6 @@ export const DashboardStats = () => {
     const newVisibility = { ...visibility, [key]: !visibility[key] };
     setVisibility(newVisibility);
     
-    // Save to Supabase
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase
@@ -39,66 +38,56 @@ export const DashboardStats = () => {
     loadStats();
     loadPreferences();
 
-    // Subscribe to payment changes for real-time updates
     const channel = supabase
       .channel('dashboard-stats-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'payments'
-        },
-        () => {
-          loadStats();
-          toast({
-            title: "Dashboard Updated",
-            description: "Payment data has been refreshed",
-          });
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => {
+        loadStats();
+        toast({ title: "Dashboard Updated", description: "Payment data has been refreshed" });
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const loadPreferences = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
-        .from('user_preferences')
-        .select('dashboard_stats_visible')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      if (data?.dashboard_stats_visible) {
-        setVisibility({
-          totalStudents: true,
-          feesCollected: true,
-          pendingFees: true,
-        });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('user_preferences')
+          .select('dashboard_stats_visible')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (data?.dashboard_stats_visible) {
+          setVisibility({ totalStudents: true, feesCollected: true, pendingFees: true });
+        }
       }
+    } catch (err) {
+      console.error("Error loading preferences:", err);
     }
   };
 
   const loadStats = async () => {
-    const { data: students } = await supabase.from("students").select("*");
-    const { data: payments } = await supabase.from("payments").select("*");
+    try {
+      const { data: students } = await supabase.from("students").select("id, monthly_fee");
+      const { data: payments } = await supabase.from("payments").select("amount_paid, month");
 
-    const currentMonth = new Date().toLocaleString("default", { month: "long", year: "numeric" });
-    const monthlyPayments = payments?.filter((p) => p.month === currentMonth) || [];
-    const totalCollected = monthlyPayments.reduce((sum, p) => sum + Number(p.amount_paid), 0);
+      const currentMonth = new Date().toLocaleString("default", { month: "long", year: "numeric" });
+      const monthlyPayments = payments?.filter((p) => p.month === currentMonth) || [];
+      const totalCollected = monthlyPayments.reduce((sum, p) => sum + Number(p.amount_paid), 0);
 
-    const totalMonthlyFees = students?.reduce((sum, s) => sum + Number(s.monthly_fee), 0) || 0;
-    const totalPending = totalMonthlyFees - totalCollected;
+      const totalMonthlyFees = students?.reduce((sum, s) => sum + Number(s.monthly_fee), 0) || 0;
+      const totalPending = totalMonthlyFees - totalCollected;
 
-    setStats({
-      totalStudents: students?.length || 0,
-      totalCollected,
-      totalPending: Math.max(0, totalPending),
-    });
+      setStats({
+        totalStudents: students?.length || 0,
+        totalCollected,
+        totalPending: Math.max(0, totalPending),
+      });
+    } catch (err) {
+      console.error("Error loading stats:", err);
+    }
   };
 
   const statCards = [

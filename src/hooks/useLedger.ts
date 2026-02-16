@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   LedgerEntry,
@@ -47,6 +47,22 @@ export const useLedger = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Stabilize array dependencies using serialized refs
+  const pausedMonthsRef = useRef<string>(JSON.stringify(pausedMonths));
+  const feeHistoryRef = useRef<string>(JSON.stringify(feeHistory.map(f => ({ id: f.id, monthly_fee: f.monthly_fee, effective_from_month: f.effective_from_month }))));
+  const hasSyncedRef = useRef(false);
+
+  // Update refs when serialized values actually change
+  const serializedPaused = JSON.stringify(pausedMonths);
+  const serializedFeeHistory = JSON.stringify(feeHistory.map(f => ({ id: f.id, monthly_fee: f.monthly_fee, effective_from_month: f.effective_from_month })));
+  
+  if (serializedPaused !== pausedMonthsRef.current) {
+    pausedMonthsRef.current = serializedPaused;
+  }
+  if (serializedFeeHistory !== feeHistoryRef.current) {
+    feeHistoryRef.current = serializedFeeHistory;
+  }
+
   const fetchLedger = useCallback(async () => {
     if (!studentId) return;
     
@@ -72,12 +88,15 @@ export const useLedger = ({
       setLoading(true);
       setError(null);
       
+      const currentPaused = JSON.parse(pausedMonthsRef.current) as string[];
+      const currentFeeHistory = feeHistory;
+      
       const ledgerEntries = await fullLedgerSync(
         studentId,
         joiningDate,
         monthlyFee,
-        pausedMonths,
-        feeHistory
+        currentPaused,
+        currentFeeHistory
       );
       setEntries(ledgerEntries);
       setSummary(calculateLedgerSummary(ledgerEntries));
@@ -87,16 +106,26 @@ export const useLedger = ({
     } finally {
       setLoading(false);
     }
-  }, [studentId, joiningDate, monthlyFee, pausedMonths, feeHistory]);
+  }, [studentId, joiningDate, monthlyFee, feeHistory]);
 
-  // Initial load - sync if autoSync is enabled and we have the required data
+  // Initial load - sync once when student data is ready
   useEffect(() => {
-    if (autoSync && joiningDate && monthlyFee) {
+    if (!studentId) return;
+
+    if (autoSync && joiningDate && monthlyFee && !hasSyncedRef.current) {
+      hasSyncedRef.current = true;
       syncLedger();
-    } else {
+    } else if (!autoSync || !joiningDate || !monthlyFee) {
       fetchLedger();
     }
-  }, [autoSync, joiningDate, monthlyFee, syncLedger, fetchLedger]);
+  }, [studentId, autoSync, !!joiningDate, !!monthlyFee]);
+
+  // Re-sync when paused months or fee history actually change (after initial sync)
+  useEffect(() => {
+    if (!studentId || !joiningDate || !monthlyFee || !hasSyncedRef.current) return;
+    
+    syncLedger();
+  }, [pausedMonthsRef.current, feeHistoryRef.current]);
 
   // Subscribe to real-time updates
   useEffect(() => {
