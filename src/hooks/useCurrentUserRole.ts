@@ -16,41 +16,29 @@ export function useCurrentUserRole() {
         return;
       }
 
-      // Check roles in order of privilege
-      const { data: isSuperAdmin } = await supabase.rpc('has_role', {
-        _user_id: session.user.id,
-        _role: 'super_admin'
-      });
+      // Single query instead of 3 sequential RPC calls
+      const { data: roles, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', session.user.id);
 
-      if (isSuperAdmin) {
+      if (error || !roles || roles.length === 0) {
+        setRole('user');
+        setLoading(false);
+        return;
+      }
+
+      const roleSet = new Set(roles.map(r => r.role));
+
+      if (roleSet.has('super_admin')) {
         setRole('super_admin');
-        setLoading(false);
-        return;
-      }
-
-      const { data: isAdmin } = await supabase.rpc('has_role', {
-        _user_id: session.user.id,
-        _role: 'admin'
-      });
-
-      if (isAdmin) {
+      } else if (roleSet.has('admin')) {
         setRole('admin');
-        setLoading(false);
-        return;
-      }
-
-      const { data: isTeacher } = await supabase.rpc('has_role', {
-        _user_id: session.user.id,
-        _role: 'teacher'
-      });
-
-      if (isTeacher) {
+      } else if (roleSet.has('teacher')) {
         setRole('teacher');
-        setLoading(false);
-        return;
+      } else {
+        setRole('user');
       }
-
-      setRole('user');
     } catch (error) {
       console.error('Error checking user role:', error);
       setRole(null);

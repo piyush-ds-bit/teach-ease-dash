@@ -22,21 +22,22 @@ export const ProtectedAdminRoute = ({ children }: ProtectedAdminRouteProps) => {
           return;
         }
 
-        // Check if user has teacher, admin, or super_admin role
-        const { data: hasTeacherRole } = await supabase.rpc('has_role', {
-          _user_id: session.user.id,
-          _role: 'teacher'
-        });
+        // Single query instead of 3 separate RPC calls
+        const { data: roles, error } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', session.user.id);
 
-        const { data: hasAdminRole } = await supabase.rpc('has_role', {
-          _user_id: session.user.id,
-          _role: 'admin'
-        });
+        if (error || !roles || roles.length === 0) {
+          setIsAuthorized(false);
+          navigate("/auth");
+          return;
+        }
 
-        const { data: hasSuperAdminRole } = await supabase.rpc('has_role', {
-          _user_id: session.user.id,
-          _role: 'super_admin'
-        });
+        const roleSet = new Set(roles.map(r => r.role));
+        const hasTeacherRole = roleSet.has('teacher');
+        const hasAdminRole = roleSet.has('admin');
+        const hasSuperAdminRole = roleSet.has('super_admin');
 
         if (!hasTeacherRole && !hasAdminRole && !hasSuperAdminRole) {
           setIsAuthorized(false);

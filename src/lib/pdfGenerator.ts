@@ -1,18 +1,21 @@
 import { jsPDF } from "jspdf";
 
 import { formatPausedMonth } from "@/lib/dueCalculation";
-import { getPartialDueInfo, formatMonthKey } from "@/lib/feeCalculation";
+import { formatMonthKey } from "@/lib/feeCalculation";
+import { FeeHistoryEntry, getChargeableMonthsWithFees, getPartialDueInfoWithHistory, dateToMonthKey } from "@/lib/feeHistoryCalculation";
 
 export type ReceiptData = {
   studentName: string;
   studentId: string;
   monthlyFee: number;
-  pendingMonths: string[]; // month keys in YYYY-MM format
+  pendingMonths: string[]; // now contains only UNPAID month keys
   totalDue: number;
+  totalPaid: number;
   joiningDate: string;
   subject?: string | null;
   profilePhotoUrl?: string | null;
   pausedMonths?: string[];
+  feeHistory?: FeeHistoryEntry[];
 };
 
 export const generateReceipt = async (data: ReceiptData) => {
@@ -45,7 +48,7 @@ export const generateReceipt = async (data: ReceiptData) => {
   try {
     const photoImg = new Image();
     photoImg.crossOrigin = "anonymous";
-    photoImg.src = data.profilePhotoUrl || "/default_avatar.jpg"; // <-- updated to .jpg
+    photoImg.src = data.profilePhotoUrl || "/default_avatar.jpg";
   
     await new Promise((resolve) => {
       photoImg.onload = () => {
@@ -54,32 +57,26 @@ export const generateReceipt = async (data: ReceiptData) => {
           const photoY = 50;
           const photoSize = 30;
   
-          // Create circular clipped version in canvas
           const canvas = document.createElement("canvas");
           canvas.width = photoSize * 4;
           canvas.height = photoSize * 4;
           const ctx = canvas.getContext("2d");
-  
-          // Draw circular mask
+
           ctx.beginPath();
           ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2, true);
           ctx.closePath();
           ctx.clip();
-  
-          // Draw the image inside the circle
+
           ctx.drawImage(photoImg, 0, 0, canvas.width, canvas.height);
-  
-          // Convert clipped image to base64
+
           const clippedImage = canvas.toDataURL("image/jpeg", 1.0);
-  
-          // Add clipped image to PDF
+
           pdf.addImage(clippedImage, "JPEG", photoX, photoY, photoSize, photoSize);
-  
-          // Add circular border
+
           pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
           pdf.setLineWidth(0.5);
           pdf.circle(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, "S");
-  
+
           photoYOffset = 40;
         } catch (error) {
           console.error("Error adding photo to PDF:", error);
@@ -90,7 +87,7 @@ export const generateReceipt = async (data: ReceiptData) => {
       photoImg.onerror = () => {
         console.warn("Profile photo failed to load, using default avatar.");
         const fallbackImg = new Image();
-        fallbackImg.src = "/default_avatar.jpg"; // <-- updated to .jpg
+        fallbackImg.src = "/default_avatar.jpg";
         fallbackImg.onload = () => {
           const photoX = 20;
           const photoY = 50;
@@ -115,11 +112,9 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setFont("helvetica", "bold");
   pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
   
-  // Extract first name only
   const firstName = data.studentName ? data.studentName.split(" ")[0] : "";
   const headerText = `Ram Ram ${firstName}`;
   
-  // Dynamically align to right edge
   const pageWidth = pdf.internal.pageSize.getWidth();
   pdf.text(headerText, pageWidth - 20, 65, { align: "right" });
 
@@ -198,15 +193,40 @@ export const generateReceipt = async (data: ReceiptData) => {
   yPos += lineHeight;
   pdf.setFont("helvetica", "normal");
   
-  // Calculate partial due info - need to estimate totalPaid from due and pending months
-  const totalPayable = data.pendingMonths.length * data.monthlyFee;
-  const totalPaid = Math.max(0, totalPayable - data.totalDue);
-  const partialDueInfo = getPartialDueInfo(data.totalDue, data.monthlyFee, data.pendingMonths, totalPaid);
-  
-  // Display pending months with partial due handling
+  // Use pre-calculated data: pendingMonths now contains only truly unpaid months
+  // and totalPaid is passed directly instead of being re-derived
   if (data.totalDue > 0) {
+    // Calculate partial due using fee history if available
+    let partialDueInfo: { isPartial: boolean; partialAmount: number; partialMonth: string; fullDueMonths: string[] };
+    
+    if (data.feeHistory && data.feeHistory.length > 0) {
+      const joiningDate = new Date(data.joiningDate);
+      const pausedMonths = data.pausedMonths || [];
+      const chargeableWithFees = getChargeableMonthsWithFees(joiningDate, data.feeHistory, pausedMonths);
+      const historyInfo = getPartialDueInfoWithHistory(data.totalDue, chargeableWithFees, data.totalPaid);
+      partialDueInfo = {
+        ...historyInfo,
+        fullDueMonths: historyInfo.fullDueMonths.map(formatMonthKey),
+        partialMonth: historyInfo.partialMonth ? formatMonthKey(historyInfo.partialMonth) : "",
+      };
+    } else {
+      // Legacy fallback - use simple calculation
+      const fullMonthsDue = Math.floor(data.totalDue / data.monthlyFee);
+      const partialAmount = data.totalDue % data.monthlyFee;
+      const paidFullMonths = Math.floor(data.totalPaid / data.monthlyFee);
+      const unpaidMonths = data.pendingMonths.slice(paidFullMonths);
+      
+      partialDueInfo = {
+        isPartial: partialAmount > 0,
+        partialAmount,
+        partialMonth: partialAmount > 0 && unpaidMonths.length > fullMonthsDue
+          ? formatMonthKey(unpaidMonths[fullMonthsDue])
+          : "",
+        fullDueMonths: unpaidMonths.slice(0, fullMonthsDue).map(formatMonthKey),
+      };
+    }
+
     if (partialDueInfo.fullDueMonths.length > 0 && partialDueInfo.isPartial) {
-      // Has both full months and partial
       const fullMonthsText = partialDueInfo.fullDueMonths.join(", ");
       const partialText = `${partialDueInfo.partialMonth} (Partial: Rs. ${partialDueInfo.partialAmount.toLocaleString("en-IN")})`;
       const combinedText = `${fullMonthsText}, ${partialText}`;
@@ -214,19 +234,16 @@ export const generateReceipt = async (data: ReceiptData) => {
       pdf.text(splitMonths, 20, yPos);
       yPos += splitMonths.length * lineHeight;
     } else if (partialDueInfo.fullDueMonths.length > 0) {
-      // Only full months due
       const monthsText = partialDueInfo.fullDueMonths.join(", ");
       const splitMonths = pdf.splitTextToSize(monthsText, 170);
       pdf.text(splitMonths, 20, yPos);
       yPos += splitMonths.length * lineHeight;
     } else if (partialDueInfo.isPartial) {
-      // Only partial due (totalDue < monthlyFee)
       const partialText = `Rs. ${partialDueInfo.partialAmount.toLocaleString("en-IN")} (Partial due for ${partialDueInfo.partialMonth})`;
       const splitMonths = pdf.splitTextToSize(partialText, 170);
       pdf.text(splitMonths, 20, yPos);
       yPos += splitMonths.length * lineHeight;
     } else {
-      // Edge case: has due but no months (shouldn't happen)
       const pendingText = data.pendingMonths.map(m => formatMonthKey(m)).join(", ");
       const splitMonths = pdf.splitTextToSize(pendingText || "Outstanding balance", 170);
       pdf.text(splitMonths, 20, yPos);
@@ -237,7 +254,7 @@ export const generateReceipt = async (data: ReceiptData) => {
     yPos += lineHeight;
   }
 
-  // Paused Months Section (only if paused months exist)
+  // Paused Months Section
   if (data.pausedMonths && data.pausedMonths.length > 0) {
     yPos += 8;
     pdf.setFontSize(11);
@@ -270,7 +287,6 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setFontSize(11);
   pdf.setFont("helvetica", "normal");
   
-  // Load and add signature image
   try {
     const signatureUrl = "/My_signature.jpeg";
     const img = new Image();
@@ -278,10 +294,7 @@ export const generateReceipt = async (data: ReceiptData) => {
     
     await new Promise((resolve, reject) => {
       img.onload = () => {
-        // Add signature image
         pdf.addImage(img, "JPEG", 130, yPos, 50, 20);
-        
-        // Signature line and text
         pdf.line(130, yPos + 22, 180, yPos + 22);
         pdf.setFontSize(10);
         pdf.text("Authorized Signature", 155, yPos + 28, { align: "center" });
@@ -291,7 +304,6 @@ export const generateReceipt = async (data: ReceiptData) => {
     });
   } catch (error) {
     console.error("Error loading signature:", error);
-    // Fallback: just draw the line without image
     pdf.line(130, yPos + 22, 180, yPos + 22);
     pdf.setFontSize(10);
     pdf.text("Authorized Signature", 155, yPos + 28, { align: "center" });
@@ -302,10 +314,8 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setTextColor(128, 128, 128);
   pdf.text("This is a computer-generated receipt", 105, 280, { align: "center" });
 
-  // Generate blob for WhatsApp sharing
   const pdfBlob = pdf.output("blob");
   
-  // Auto-download
   pdf.save(`Receipt_${data.studentName.replace(/\s+/g, "_")}_${currentDate.replace(/\s+/g, "_")}.pdf`);
 
   return pdfBlob;
