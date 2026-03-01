@@ -22,22 +22,16 @@ export const ProtectedAdminRoute = ({ children }: ProtectedAdminRouteProps) => {
           return;
         }
 
-        // Single query instead of 3 separate RPC calls
-        const { data: roles, error } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', session.user.id);
+        // Use has_role RPC (SECURITY DEFINER) in parallel — bypasses restrictive RLS
+        const [teacherRes, adminRes, superAdminRes] = await Promise.all([
+          supabase.rpc('has_role', { _user_id: session.user.id, _role: 'teacher' }),
+          supabase.rpc('has_role', { _user_id: session.user.id, _role: 'admin' }),
+          supabase.rpc('has_role', { _user_id: session.user.id, _role: 'super_admin' }),
+        ]);
 
-        if (error || !roles || roles.length === 0) {
-          setIsAuthorized(false);
-          navigate("/auth");
-          return;
-        }
-
-        const roleSet = new Set(roles.map(r => r.role));
-        const hasTeacherRole = roleSet.has('teacher');
-        const hasAdminRole = roleSet.has('admin');
-        const hasSuperAdminRole = roleSet.has('super_admin');
+        const hasTeacherRole = !!teacherRes.data;
+        const hasAdminRole = !!adminRes.data;
+        const hasSuperAdminRole = !!superAdminRes.data;
 
         if (!hasTeacherRole && !hasAdminRole && !hasSuperAdminRole) {
           setIsAuthorized(false);
@@ -71,7 +65,6 @@ export const ProtectedAdminRoute = ({ children }: ProtectedAdminRouteProps) => {
 
     checkAuth();
 
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         setIsAuthorized(false);

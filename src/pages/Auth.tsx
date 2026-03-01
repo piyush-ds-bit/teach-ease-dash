@@ -61,20 +61,15 @@ const Auth = () => {
 
       // Check if the user has a valid role (teacher, admin, or super_admin)
       if (data.session) {
-        const { data: hasTeacherRole } = await supabase.rpc('has_role', {
-          _user_id: data.session.user.id,
-          _role: 'teacher'
-        });
+        const [teacherRes, adminRes, superAdminRes] = await Promise.all([
+          supabase.rpc('has_role', { _user_id: data.session.user.id, _role: 'teacher' }),
+          supabase.rpc('has_role', { _user_id: data.session.user.id, _role: 'admin' }),
+          supabase.rpc('has_role', { _user_id: data.session.user.id, _role: 'super_admin' }),
+        ]);
 
-        const { data: hasAdminRole } = await supabase.rpc('has_role', {
-          _user_id: data.session.user.id,
-          _role: 'admin'
-        });
-
-        const { data: hasSuperAdminRole } = await supabase.rpc('has_role', {
-          _user_id: data.session.user.id,
-          _role: 'super_admin'
-        });
+        const hasTeacherRole = !!teacherRes.data;
+        const hasAdminRole = !!adminRes.data;
+        const hasSuperAdminRole = !!superAdminRes.data;
 
         if (!hasTeacherRole && !hasAdminRole && !hasSuperAdminRole) {
           await supabase.auth.signOut();
