@@ -295,6 +295,47 @@ const StudentProfile = () => {
             )}
             <EditStudentDialog student={student} onUpdate={handleDataUpdate} />
             <DeleteStudentDialog studentId={student.id} studentName={student.name} />
+            {student.is_active ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const today = new Date().toISOString().split('T')[0];
+                  const { error } = await supabase
+                    .from('students')
+                    .update({ is_active: false, deactivated_on: today } as any)
+                    .eq('id', student.id);
+                  if (error) {
+                    toast.error("Failed to deactivate student");
+                  } else {
+                    toast.success("Student deactivated");
+                    handleDataUpdate();
+                  }
+                }}
+              >
+                <Power className="h-4 w-4 mr-1" /> Deactivate
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-green-600 text-green-600 hover:bg-green-50"
+                onClick={async () => {
+                  const { error } = await supabase
+                    .from('students')
+                    .update({ is_active: true, deactivated_on: null } as any)
+                    .eq('id', student.id);
+                  if (error) {
+                    toast.error("Failed to reactivate student");
+                  } else {
+                    toast.success("Student reactivated");
+                    handleDataUpdate();
+                  }
+                }}
+              >
+                <Power className="h-4 w-4 mr-1" /> Reactivate
+              </Button>
+            )}
           </div>
         </div>
 
