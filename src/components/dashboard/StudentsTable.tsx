@@ -24,6 +24,8 @@ type Student = {
   subject: string | null;
   profile_photo_url: string | null;
   paused_months: string[] | null;
+  is_active: boolean;
+  deactivated_on: string | null;
   total_paid?: number;
   last_payment_date?: string | null;
   fee_history?: FeeHistoryEntry[];
@@ -59,7 +61,7 @@ export const StudentsTable = () => {
     try {
       setError(null);
       const [studentsData, paymentsData, feeHistoryData] = await Promise.all([
-        supabase.from("students").select("id, name, class, contact_number, monthly_fee, joining_date, subject, profile_photo_url, paused_months").order("name"),
+        supabase.from("students").select("id, name, class, contact_number, monthly_fee, joining_date, subject, profile_photo_url, paused_months, is_active, deactivated_on").order("name"),
         supabase.from("payments").select("student_id, amount_paid, payment_date"),
         supabase.from("student_fee_history").select("id, student_id, monthly_fee, effective_from_month, created_at, teacher_id").order("effective_from_month"),
       ]);
@@ -96,9 +98,10 @@ export const StudentsTable = () => {
     const pausedMonths = student.paused_months || [];
     const feeHistory = student.fee_history || [];
     const totalPaid = student.total_paid || 0;
+    const deactivatedOn = student.is_active === false ? student.deactivated_on : null;
 
     if (feeHistory.length > 0) {
-      const totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths);
+      const totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths, deactivatedOn);
       return Math.max(0, totalPayable - totalPaid);
     }
 
@@ -110,7 +113,7 @@ export const StudentsTable = () => {
       created_at: new Date().toISOString(),
       teacher_id: null,
     }];
-    const totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths);
+    const totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths, deactivatedOn);
     return Math.max(0, totalPayable - totalPaid);
   };
 

@@ -160,14 +160,15 @@ const StudentProfile = () => {
         
         const joiningDate = new Date(studentData.joining_date);
         const pausedMonths = studentData.paused_months || [];
+        const deactivatedOn = (studentData as any).is_active === false ? (studentData as any).deactivated_on : null;
         
         // Use fee history for accurate calculation
         let totalPayable: number;
         let chargeableWithFees: { monthKey: string; fee: number }[] = [];
         
         if (feeHistoryResult.length > 0) {
-          totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistoryResult, pausedMonths);
-          chargeableWithFees = getChargeableMonthsWithFees(joiningDate, feeHistoryResult, pausedMonths);
+          totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistoryResult, pausedMonths, deactivatedOn);
+          chargeableWithFees = getChargeableMonthsWithFees(joiningDate, feeHistoryResult, pausedMonths, deactivatedOn);
         } else {
           const syntheticHistory: FeeHistoryEntry[] = [{
             id: 'synthetic',
@@ -177,13 +178,13 @@ const StudentProfile = () => {
             created_at: new Date().toISOString(),
             teacher_id: null,
           }];
-          totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths);
-          chargeableWithFees = getChargeableMonthsWithFees(joiningDate, syntheticHistory, pausedMonths);
+          totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths, deactivatedOn);
+          chargeableWithFees = getChargeableMonthsWithFees(joiningDate, syntheticHistory, pausedMonths, deactivatedOn);
         }
         
         const totalPaid = calculateTotalPaidFromPayments(paymentsData);
         const totalDue = Math.max(0, totalPayable - totalPaid);
-        const pendingMonths = getChargeableMonths(joiningDate, pausedMonths);
+        const pendingMonths = getChargeableMonths(joiningDate, pausedMonths, deactivatedOn);
         
         // Calculate actual unpaid months for receipt
         const partialInfo = getPartialDueInfoWithHistory(totalDue, chargeableWithFees, totalPaid);
