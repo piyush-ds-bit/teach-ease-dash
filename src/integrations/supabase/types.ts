@@ -379,7 +379,9 @@ export type Database = {
           class: string
           contact_number: string
           created_at: string
+          deactivated_on: string | null
           id: string
+          is_active: boolean
           joining_date: string
           monthly_fee: number
           name: string
@@ -393,7 +395,9 @@ export type Database = {
           class: string
           contact_number: string
           created_at?: string
+          deactivated_on?: string | null
           id?: string
+          is_active?: boolean
           joining_date: string
           monthly_fee: number
           name: string
@@ -407,7 +411,9 @@ export type Database = {
           class?: string
           contact_number?: string
           created_at?: string
+          deactivated_on?: string | null
           id?: string
+          is_active?: boolean
           joining_date?: string
           monthly_fee?: number
           name?: string

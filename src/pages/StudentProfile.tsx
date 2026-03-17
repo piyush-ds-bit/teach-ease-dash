@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Phone, Calendar, DollarSign, Eye, EyeOff, User } from "lucide-react";
+import { ArrowLeft, Phone, Calendar, DollarSign, Eye, EyeOff, User, Power } from "lucide-react";
+import { toast } from "sonner";
 import { PaymentHistory } from "@/components/student/PaymentHistory";
 import { AddPaymentDialog } from "@/components/student/AddPaymentDialog";
 import { EditStudentDialog } from "@/components/student/EditStudentDialog";
@@ -40,6 +41,8 @@ type Student = {
   remarks: string;
   profile_photo_url: string | null;
   paused_months: string[] | null;
+  is_active: boolean;
+  deactivated_on: string | null;
 };
 
 type Payment = {
@@ -254,6 +257,13 @@ const StudentProfile = () => {
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl sm:text-3xl font-bold">{student.name}</h1>
               <StudentStatusBadge status={studentStatus} />
+              {student.is_active ? (
+                <span className="text-sm font-medium text-green-600">🟢 Active</span>
+              ) : (
+                <span className="text-sm font-medium text-red-600">
+                  🔴 Inactive{student.deactivated_on ? ` since ${new Date(student.deactivated_on).toLocaleDateString()}` : ''}
+                </span>
+              )}
             </div>
             <p className="text-muted-foreground">Class {student.class}</p>
           </div>
@@ -285,6 +295,47 @@ const StudentProfile = () => {
             )}
             <EditStudentDialog student={student} onUpdate={handleDataUpdate} />
             <DeleteStudentDialog studentId={student.id} studentName={student.name} />
+            {student.is_active ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const today = new Date().toISOString().split('T')[0];
+                  const { error } = await supabase
+                    .from('students')
+                    .update({ is_active: false, deactivated_on: today } as any)
+                    .eq('id', student.id);
+                  if (error) {
+                    toast.error("Failed to deactivate student");
+                  } else {
+                    toast.success("Student deactivated");
+                    handleDataUpdate();
+                  }
+                }}
+              >
+                <Power className="h-4 w-4 mr-1" /> Deactivate
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-green-600 text-green-600 hover:bg-green-50"
+                onClick={async () => {
+                  const { error } = await supabase
+                    .from('students')
+                    .update({ is_active: true, deactivated_on: null } as any)
+                    .eq('id', student.id);
+                  if (error) {
+                    toast.error("Failed to reactivate student");
+                  } else {
+                    toast.success("Student reactivated");
+                    handleDataUpdate();
+                  }
+                }}
+              >
+                <Power className="h-4 w-4 mr-1" /> Reactivate
+              </Button>
+            )}
           </div>
         </div>
 
