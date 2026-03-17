@@ -62,12 +62,21 @@ export const calculateTotalPayable = (
  */
 export const getChargeableMonths = (
   joiningDate: Date,
-  pausedMonths: string[] = []
+  pausedMonths: string[] = [],
+  deactivatedOn?: string | null
 ): string[] => {
   const now = new Date();
 
   const startMonth = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1);
-  const endMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  let endMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  if (deactivatedOn) {
+    const deactDate = new Date(deactivatedOn);
+    const deactEnd = new Date(deactDate.getFullYear(), deactDate.getMonth() + 1, 1);
+    if (deactEnd < endMonth) {
+      endMonth = deactEnd;
+    }
+  }
 
   if (startMonth >= endMonth) return [];
 
