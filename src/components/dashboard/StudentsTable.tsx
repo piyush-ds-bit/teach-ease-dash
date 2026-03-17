@@ -61,7 +61,7 @@ export const StudentsTable = () => {
     try {
       setError(null);
       const [studentsData, paymentsData, feeHistoryData] = await Promise.all([
-        supabase.from("students").select("id, name, class, contact_number, monthly_fee, joining_date, subject, profile_photo_url, paused_months").order("name"),
+        supabase.from("students").select("id, name, class, contact_number, monthly_fee, joining_date, subject, profile_photo_url, paused_months, is_active, deactivated_on").order("name"),
         supabase.from("payments").select("student_id, amount_paid, payment_date"),
         supabase.from("student_fee_history").select("id, student_id, monthly_fee, effective_from_month, created_at, teacher_id").order("effective_from_month"),
       ]);
