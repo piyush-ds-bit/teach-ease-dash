@@ -186,22 +186,24 @@ export const getStudentFeeData = async (studentId: string) => {
   const pausedMonths = student.paused_months || [];
   const monthlyFee = Number(student.monthly_fee); // Current fee for display
 
+  const deactivatedOn = (student as any).is_active === false ? (student as any).deactivated_on : null;
+
   // Use fee history for accurate calculation if available
   let totalPayable: number;
   let chargeableMonthsWithFees: { monthKey: string; fee: number }[] = [];
 
   if (feeHistory.length > 0) {
-    totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths);
-    chargeableMonthsWithFees = getChargeableMonthsWithFees(joiningDate, feeHistory, pausedMonths);
+    totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths, deactivatedOn);
+    chargeableMonthsWithFees = getChargeableMonthsWithFees(joiningDate, feeHistory, pausedMonths, deactivatedOn);
   } else {
     // Fallback to legacy calculation (shouldn't happen with proper backfill)
-    totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths);
+    totalPayable = calculateTotalPayable(joiningDate, monthlyFee, pausedMonths, deactivatedOn);
   }
 
   const totalPaid = calculateTotalPaidFromPayments(payments);
   const totalDue = Math.max(0, totalPayable - totalPaid);
 
-  const chargeableMonths = getChargeableMonths(joiningDate, pausedMonths);
+  const chargeableMonths = getChargeableMonths(joiningDate, pausedMonths, deactivatedOn);
 
   // Use fee history for partial due if available
   let partialDueInfo: PartialDueInfo;
