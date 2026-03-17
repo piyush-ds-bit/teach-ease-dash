@@ -91,7 +91,8 @@ export const dateToMonthKey = (date: Date): string => {
 export const calculateTotalPayableWithHistory = (
   joiningDate: Date,
   feeHistory: FeeHistoryEntry[],
-  pausedMonths: string[] = []
+  pausedMonths: string[] = [],
+  deactivatedOn?: string | null
 ): number => {
   if (feeHistory.length === 0) {
     return 0;
@@ -99,7 +100,16 @@ export const calculateTotalPayableWithHistory = (
 
   const now = new Date();
   const startMonth = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1);
-  const endMonth = new Date(now.getFullYear(), now.getMonth(), 1); // current month excluded
+  let endMonth = new Date(now.getFullYear(), now.getMonth(), 1); // current month excluded
+
+  // If deactivated, cap end month to the month after deactivated_on
+  if (deactivatedOn) {
+    const deactDate = new Date(deactivatedOn);
+    const deactEnd = new Date(deactDate.getFullYear(), deactDate.getMonth() + 1, 1);
+    if (deactEnd < endMonth) {
+      endMonth = deactEnd;
+    }
+  }
 
   if (startMonth >= endMonth) return 0;
 
