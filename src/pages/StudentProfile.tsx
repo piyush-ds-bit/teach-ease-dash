@@ -41,6 +41,8 @@ type Student = {
   remarks: string;
   profile_photo_url: string | null;
   paused_months: string[] | null;
+  is_active: boolean;
+  deactivated_on: string | null;
 };
 
 type Payment = {
