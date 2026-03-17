@@ -98,9 +98,10 @@ export const StudentsTable = () => {
     const pausedMonths = student.paused_months || [];
     const feeHistory = student.fee_history || [];
     const totalPaid = student.total_paid || 0;
+    const deactivatedOn = student.is_active === false ? student.deactivated_on : null;
 
     if (feeHistory.length > 0) {
-      const totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths);
+      const totalPayable = calculateTotalPayableWithHistory(joiningDate, feeHistory, pausedMonths, deactivatedOn);
       return Math.max(0, totalPayable - totalPaid);
     }
 
@@ -112,7 +113,7 @@ export const StudentsTable = () => {
       created_at: new Date().toISOString(),
       teacher_id: null,
     }];
-    const totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths);
+    const totalPayable = calculateTotalPayableWithHistory(joiningDate, syntheticHistory, pausedMonths, deactivatedOn);
     return Math.max(0, totalPayable - totalPaid);
   };
 
