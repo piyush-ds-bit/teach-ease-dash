@@ -24,6 +24,8 @@ type Student = {
   subject: string | null;
   profile_photo_url: string | null;
   paused_months: string[] | null;
+  is_active: boolean;
+  deactivated_on: string | null;
   total_paid?: number;
   last_payment_date?: string | null;
   fee_history?: FeeHistoryEntry[];
