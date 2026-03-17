@@ -257,6 +257,13 @@ const StudentProfile = () => {
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl sm:text-3xl font-bold">{student.name}</h1>
               <StudentStatusBadge status={studentStatus} />
+              {student.is_active ? (
+                <span className="text-sm font-medium text-green-600">🟢 Active</span>
+              ) : (
+                <span className="text-sm font-medium text-red-600">
+                  🔴 Inactive{student.deactivated_on ? ` since ${new Date(student.deactivated_on).toLocaleDateString()}` : ''}
+                </span>
+              )}
             </div>
             <p className="text-muted-foreground">Class {student.class}</p>
           </div>
