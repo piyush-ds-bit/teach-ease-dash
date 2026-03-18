@@ -309,6 +309,41 @@ export type Database = {
           },
         ]
       }
+      plant_donations: {
+        Row: {
+          created_at: string
+          donation_date: string
+          id: string
+          student_id: string
+          teacher_id: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          donation_date: string
+          id?: string
+          student_id: string
+          teacher_id?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string
+          donation_date?: string
+          id?: string
+          student_id?: string
+          teacher_id?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plant_donations_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       routines: {
         Row: {
           created_at: string
@@ -379,6 +414,7 @@ export type Database = {
           class: string
           contact_number: string
           created_at: string
+          date_of_birth: string | null
           deactivated_on: string | null
           id: string
           is_active: boolean
@@ -395,6 +431,7 @@ export type Database = {
           class: string
           contact_number: string
           created_at?: string
+          date_of_birth?: string | null
           deactivated_on?: string | null
           id?: string
           is_active?: boolean
@@ -411,6 +448,7 @@ export type Database = {
           class?: string
           contact_number?: string
           created_at?: string
+          date_of_birth?: string | null
           deactivated_on?: string | null
           id?: string
           is_active?: boolean
