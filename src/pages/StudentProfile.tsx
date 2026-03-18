@@ -43,6 +43,7 @@ type Student = {
   paused_months: string[] | null;
   is_active: boolean;
   deactivated_on: string | null;
+  date_of_birth: string | null;
 };
 
 type Payment = {
