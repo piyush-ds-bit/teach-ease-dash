@@ -24,6 +24,7 @@ export const AddStudentDialog = () => {
     joining_date: "",
     subject: "",
     remarks: "",
+    date_of_birth: "",
   });
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
