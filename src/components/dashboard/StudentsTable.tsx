@@ -127,11 +127,14 @@ export const StudentsTable = () => {
     }
   };
 
-  const filteredStudents = students.filter(
-    (s) =>
+  const filteredStudents = students.filter((s) => {
+    const matchesSearch =
       s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.class.toLowerCase().includes(search.toLowerCase())
-  );
+      s.class.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus =
+      statusFilter === "active" ? s.is_active !== false : s.is_active === false;
+    return matchesSearch && matchesStatus;
+  });
 
   if (loading) {
     return <div className="text-center py-8">Loading students...</div>;
