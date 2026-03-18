@@ -420,6 +420,12 @@ const StudentProfile = () => {
               <Phone className="h-4 w-4 text-muted-foreground" />
               <span>{student.contact_number}</span>
             </div>
+            {student.date_of_birth && (
+              <div>
+                <p className="text-sm text-muted-foreground">Date of Birth:</p>
+                <p>🎂 {new Date(student.date_of_birth).toLocaleDateString()}</p>
+              </div>
+            )}
             {student.subject && (
               <div>
                 <p className="text-sm text-muted-foreground">Subject:</p>
