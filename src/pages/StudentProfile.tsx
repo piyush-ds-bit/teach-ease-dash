@@ -15,6 +15,7 @@ import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { GenerateReceiptButton } from "@/components/student/GenerateReceiptButton";
 import { HomeworkList } from "@/components/homework/HomeworkList";
 import { PauseMonthSection } from "@/components/student/PauseMonthSection";
+import { PlantDonationSection } from "@/components/student/PlantDonationSection";
 import { FeeTimeline } from "@/components/student/FeeTimeline";
 import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
 import { CopyFeeReminderButton } from "@/components/student/CopyFeeReminderButton";
