@@ -43,6 +43,7 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
     joining_date: student.joining_date,
     subject: student.subject || "",
     remarks: student.remarks || "",
+    date_of_birth: student.date_of_birth || "",
   });
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
