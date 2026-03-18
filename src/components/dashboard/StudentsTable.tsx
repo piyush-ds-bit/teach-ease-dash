@@ -154,8 +154,8 @@ export const StudentsTable = () => {
 
   return (
     <Card className="shadow-card">
-      <div className="p-4 border-b">
-        <div className="relative">
+      <div className="p-4 border-b flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by name or class..."
@@ -164,6 +164,19 @@ export const StudentsTable = () => {
             className="pl-10"
           />
         </div>
+        <ToggleGroup
+          type="single"
+          value={statusFilter}
+          onValueChange={(val) => { if (val) setStatusFilter(val); }}
+          className="shrink-0"
+        >
+          <ToggleGroupItem value="active" aria-label="Active students" className="text-xs px-3">
+            🟢 Active
+          </ToggleGroupItem>
+          <ToggleGroupItem value="inactive" aria-label="Inactive students" className="text-xs px-3">
+            🔴 Inactive
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
