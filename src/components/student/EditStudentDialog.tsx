@@ -20,6 +20,7 @@ type Student = {
   subject: string | null;
   remarks: string;
   profile_photo_url: string | null;
+  date_of_birth: string | null;
 };
 
 type EditStudentDialogProps = {
@@ -42,6 +43,7 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
     joining_date: student.joining_date,
     subject: student.subject || "",
     remarks: student.remarks || "",
+    date_of_birth: student.date_of_birth || "",
   });
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -158,7 +160,8 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
           subject: formData.subject || null,
           remarks: validationResult.data.remarks || null,
           profile_photo_url: photoUrl,
-        })
+          date_of_birth: formData.date_of_birth || null,
+        } as any)
         .eq("id", student.id);
 
       if (error) throw error;
@@ -257,6 +260,15 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
                 value={formData.joining_date}
                 onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
                 required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dob">Date of Birth</Label>
+              <Input
+                id="dob"
+                type="date"
+                value={formData.date_of_birth}
+                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
               />
             </div>
             <div className="grid gap-2">

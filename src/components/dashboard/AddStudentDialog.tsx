@@ -24,6 +24,7 @@ export const AddStudentDialog = () => {
     joining_date: "",
     subject: "",
     remarks: "",
+    date_of_birth: "",
   });
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -118,7 +119,8 @@ export const AddStudentDialog = () => {
         remarks: validationResult.data.remarks || null,
         profile_photo_url: photoUrl,
         teacher_id: user.id,
-      }).select().single();
+        date_of_birth: formData.date_of_birth || null,
+      } as any).select().single();
 
       if (error) throw error;
 
@@ -216,6 +218,15 @@ export const AddStudentDialog = () => {
                 value={formData.joining_date}
                 onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
                 required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dob">Date of Birth</Label>
+              <Input
+                id="dob"
+                type="date"
+                value={formData.date_of_birth}
+                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
               />
             </div>
             <div className="grid gap-2">

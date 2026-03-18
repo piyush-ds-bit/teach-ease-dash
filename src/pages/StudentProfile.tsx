@@ -15,6 +15,7 @@ import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { GenerateReceiptButton } from "@/components/student/GenerateReceiptButton";
 import { HomeworkList } from "@/components/homework/HomeworkList";
 import { PauseMonthSection } from "@/components/student/PauseMonthSection";
+import { PlantDonationSection } from "@/components/student/PlantDonationSection";
 import { FeeTimeline } from "@/components/student/FeeTimeline";
 import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
 import { CopyFeeReminderButton } from "@/components/student/CopyFeeReminderButton";
@@ -43,6 +44,7 @@ type Student = {
   paused_months: string[] | null;
   is_active: boolean;
   deactivated_on: string | null;
+  date_of_birth: string | null;
 };
 
 type Payment = {
@@ -418,6 +420,12 @@ const StudentProfile = () => {
               <Phone className="h-4 w-4 text-muted-foreground" />
               <span>{student.contact_number}</span>
             </div>
+            {student.date_of_birth && (
+              <div>
+                <p className="text-sm text-muted-foreground">Date of Birth:</p>
+                <p>🎂 {new Date(student.date_of_birth).toLocaleDateString()}</p>
+              </div>
+            )}
             {student.subject && (
               <div>
                 <p className="text-sm text-muted-foreground">Subject:</p>
@@ -432,6 +440,12 @@ const StudentProfile = () => {
             )}
           </CardContent>
         </Card>
+
+        <PlantDonationSection
+          studentId={student.id}
+          studentName={student.name}
+          dateOfBirth={student.date_of_birth}
+        />
 
         <PauseMonthSection
           studentId={student.id}
