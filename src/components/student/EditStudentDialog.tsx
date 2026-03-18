@@ -20,6 +20,7 @@ type Student = {
   subject: string | null;
   remarks: string;
   profile_photo_url: string | null;
+  date_of_birth: string | null;
 };
 
 type EditStudentDialogProps = {
