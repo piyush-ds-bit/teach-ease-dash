@@ -119,7 +119,8 @@ export const AddStudentDialog = () => {
         remarks: validationResult.data.remarks || null,
         profile_photo_url: photoUrl,
         teacher_id: user.id,
-      }).select().single();
+        date_of_birth: formData.date_of_birth || null,
+      } as any).select().single();
 
       if (error) throw error;
 
