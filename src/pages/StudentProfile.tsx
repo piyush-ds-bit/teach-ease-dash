@@ -441,6 +441,12 @@ const StudentProfile = () => {
           </CardContent>
         </Card>
 
+        <PlantDonationSection
+          studentId={student.id}
+          studentName={student.name}
+          dateOfBirth={student.date_of_birth}
+        />
+
         <PauseMonthSection
           studentId={student.id}
           pausedMonths={student.paused_months || []}
