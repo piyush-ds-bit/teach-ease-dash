@@ -221,6 +221,15 @@ export const AddStudentDialog = () => {
               />
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="dob">Date of Birth</Label>
+              <Input
+                id="dob"
+                type="date"
+                value={formData.date_of_birth}
+                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="subject">Subject</Label>
               <Input
                 id="subject"
