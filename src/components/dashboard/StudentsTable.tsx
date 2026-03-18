@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Search, User, AlertCircle } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
 import { getStudentStatusFromData } from "@/lib/statusCalculation";
 import {
