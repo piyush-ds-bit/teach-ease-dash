@@ -160,7 +160,8 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
           subject: formData.subject || null,
           remarks: validationResult.data.remarks || null,
           profile_photo_url: photoUrl,
-        })
+          date_of_birth: formData.date_of_birth || null,
+        } as any)
         .eq("id", student.id);
 
       if (error) throw error;
