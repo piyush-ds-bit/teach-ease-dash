@@ -37,6 +37,7 @@ export const StudentsTable = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("active");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
