@@ -2,6 +2,7 @@ import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardStats } from "@/components/dashboard/DashboardStats";
 import { StudentsTable } from "@/components/dashboard/StudentsTable";
 import { AddStudentDialog } from "@/components/dashboard/AddStudentDialog";
+import { BirthdaySection } from "@/components/dashboard/BirthdaySection";
 
 const Dashboard = () => {
   return (
@@ -9,6 +10,7 @@ const Dashboard = () => {
       <DashboardHeader />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         <DashboardStats />
+        <BirthdaySection />
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Students</h2>
