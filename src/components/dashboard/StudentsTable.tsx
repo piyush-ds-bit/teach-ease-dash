@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Search, User, AlertCircle } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { StudentStatusBadge } from "@/components/student/StudentStatusBadge";
 import { getStudentStatusFromData } from "@/lib/statusCalculation";
 import {
@@ -36,6 +37,7 @@ export const StudentsTable = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("active");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -125,11 +127,14 @@ export const StudentsTable = () => {
     }
   };
 
-  const filteredStudents = students.filter(
-    (s) =>
+  const filteredStudents = students.filter((s) => {
+    const matchesSearch =
       s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.class.toLowerCase().includes(search.toLowerCase())
-  );
+      s.class.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus =
+      statusFilter === "active" ? s.is_active !== false : s.is_active === false;
+    return matchesSearch && matchesStatus;
+  });
 
   if (loading) {
     return <div className="text-center py-8">Loading students...</div>;
@@ -149,8 +154,8 @@ export const StudentsTable = () => {
 
   return (
     <Card className="shadow-card">
-      <div className="p-4 border-b">
-        <div className="relative">
+      <div className="p-4 border-b flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by name or class..."
@@ -159,6 +164,19 @@ export const StudentsTable = () => {
             className="pl-10"
           />
         </div>
+        <ToggleGroup
+          type="single"
+          value={statusFilter}
+          onValueChange={(val) => { if (val) setStatusFilter(val); }}
+          className="shrink-0"
+        >
+          <ToggleGroupItem value="active" aria-label="Active students" className="text-xs px-3">
+            🟢 Active
+          </ToggleGroupItem>
+          <ToggleGroupItem value="inactive" aria-label="Inactive students" className="text-xs px-3">
+            🔴 Inactive
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
