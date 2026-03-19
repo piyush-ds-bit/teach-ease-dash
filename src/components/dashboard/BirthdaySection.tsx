@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Cake, TreePine, Loader2 } from "lucide-react";
+import { Cake, X, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   getTodaysBirthdays,
@@ -15,6 +16,7 @@ export const BirthdaySection = () => {
   const [todayBirthdays, setTodayBirthdays] = useState<BirthdayStudent[]>([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState<BirthdayStudent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     Promise.all([getTodaysBirthdays(), getUpcomingBirthdays(7)])
@@ -37,15 +39,18 @@ export const BirthdaySection = () => {
 
   const hasBirthdays = todayBirthdays.length > 0 || upcomingBirthdays.length > 0;
 
-  if (!hasBirthdays) return null;
+  if (!hasBirthdays || dismissed) return null;
 
   return (
     <Card className="shadow-card border-l-4 border-l-primary">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Cake className="h-5 w-5 text-primary" />
           Birthdays
         </CardTitle>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDismissed(true)}>
+          <X className="h-4 w-4" />
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {todayBirthdays.length > 0 && (
