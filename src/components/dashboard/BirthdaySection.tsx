@@ -15,6 +15,7 @@ export const BirthdaySection = () => {
   const [todayBirthdays, setTodayBirthdays] = useState<BirthdayStudent[]>([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState<BirthdayStudent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     Promise.all([getTodaysBirthdays(), getUpcomingBirthdays(7)])
