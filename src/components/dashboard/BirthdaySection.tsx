@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Cake, TreePine, Loader2 } from "lucide-react";
+import { Cake, X, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   getTodaysBirthdays,
