@@ -39,7 +39,7 @@ export const BirthdaySection = () => {
 
   const hasBirthdays = todayBirthdays.length > 0 || upcomingBirthdays.length > 0;
 
-  if (!hasBirthdays) return null;
+  if (!hasBirthdays || dismissed) return null;
 
   return (
     <Card className="shadow-card border-l-4 border-l-primary">
