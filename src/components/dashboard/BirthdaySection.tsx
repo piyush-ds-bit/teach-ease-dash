@@ -43,11 +43,14 @@ export const BirthdaySection = () => {
 
   return (
     <Card className="shadow-card border-l-4 border-l-primary">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Cake className="h-5 w-5 text-primary" />
           Birthdays
         </CardTitle>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDismissed(true)}>
+          <X className="h-4 w-4" />
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {todayBirthdays.length > 0 && (
