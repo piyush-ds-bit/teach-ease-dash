@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TreePine, Check, Plus, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getPlantDonationHistory,
@@ -28,6 +29,7 @@ export const PlantDonationSection = ({ studentId, studentName, dateOfBirth }: Pr
   const [donations, setDonations] = useState<PlantDonation[]>([]);
   const [loading, setLoading] = useState(true);
   const [recording, setRecording] = useState(false);
+  const [justRecorded, setJustRecorded] = useState(false);
   const currentYear = new Date().getFullYear();
 
   const loadDonations = async () => {
@@ -55,6 +57,7 @@ export const PlantDonationSection = ({ studentId, studentName, dateOfBirth }: Pr
         toast.error(result.error);
       } else {
         toast.success(`Plant donation recorded for ${studentName} (${currentYear})`);
+        setJustRecorded(true);
         await loadDonations();
       }
     } catch (err: any) {
@@ -68,6 +71,7 @@ export const PlantDonationSection = ({ studentId, studentName, dateOfBirth }: Pr
     const ok = await deletePlantDonation(id);
     if (ok) {
       toast.success(`Removed plant donation for ${year}`);
+      setJustRecorded(false);
       await loadDonations();
     } else {
       toast.error("Failed to remove donation");
@@ -91,30 +95,62 @@ export const PlantDonationSection = ({ studentId, studentName, dateOfBirth }: Pr
           <TreePine className="h-5 w-5 text-green-600" />
           Plant Donations
         </CardTitle>
-        {!currentYearDonated ? (
-          <Button size="sm" onClick={handleRecord} disabled={recording}>
-            {recording ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4 mr-1" />
-            )}
-            Record {currentYear}
-          </Button>
-        ) : (
-          <Badge className="bg-green-100 text-green-800 border-green-300">
-            <Check className="h-3 w-3 mr-1" />
-            {currentYear} Done
-          </Badge>
-        )}
+        <AnimatePresence mode="wait">
+          {!currentYearDonated ? (
+            <motion.div
+              key="record-btn"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Button
+                size="sm"
+                onClick={handleRecord}
+                disabled={recording}
+                className="active:scale-95 transition-transform"
+              >
+                {recording ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-1" />
+                )}
+                Record {currentYear}
+              </Button>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="done-badge"
+              initial={justRecorded ? { opacity: 0, scale: 0.5 } : { opacity: 1, scale: 1 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={justRecorded ? { type: "spring", stiffness: 400, damping: 15 } : { duration: 0.2 }}
+            >
+              <Badge className="bg-green-100 text-green-800 border-green-300">
+                <motion.span
+                  initial={justRecorded ? { scale: 0 } : { scale: 1 }}
+                  animate={{ scale: 1 }}
+                  transition={justRecorded ? { type: "spring", stiffness: 500, damping: 12, delay: 0.15 } : {}}
+                  className="inline-flex items-center"
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  {currentYear} Done
+                </motion.span>
+              </Badge>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </CardHeader>
       <CardContent>
         {donations.length === 0 ? (
           <p className="text-sm text-muted-foreground">No plant donations recorded yet.</p>
         ) : (
           <div className="space-y-2">
-            {donations.map((d) => (
-              <div
+            {donations.map((d, i) => (
+              <motion.div
                 key={d.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: i * 0.05 }}
                 className="flex items-center justify-between p-2 rounded-lg bg-muted/30"
               >
                 <div className="flex items-center gap-2">
@@ -132,7 +168,7 @@ export const PlantDonationSection = ({ studentId, studentName, dateOfBirth }: Pr
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
