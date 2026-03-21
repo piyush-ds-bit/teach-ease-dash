@@ -132,9 +132,21 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded, onFullyPaid }: Add
         );
       }
 
+      // Check if student is now fully paid
+      if (onFullyPaid) {
+        try {
+          const feeData = await getStudentFeeData(studentId);
+          if (feeData && feeData.totalDue <= 0) {
+            onFullyPaid();
+          }
+        } catch (e) {
+          // Non-critical, don't block success
+        }
+      }
+
       toast({
         title: "Success",
-        description: "Payment added successfully",
+        description: feeData => "Payment added successfully",
       });
 
       setOpen(false);
