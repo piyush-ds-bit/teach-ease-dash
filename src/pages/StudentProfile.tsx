@@ -511,7 +511,7 @@ const StudentProfile = () => {
           <TabsContent value="payments" className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h2 className="text-xl sm:text-2xl font-bold">Payment History</h2>
-              <AddPaymentDialog studentId={student.id} onPaymentAdded={handleDataUpdate} />
+              <AddPaymentDialog studentId={student.id} onPaymentAdded={handleDataUpdate} onFullyPaid={handleFullyPaid} />
             </div>
             <PaymentHistory studentId={student.id} />
           </TabsContent>
