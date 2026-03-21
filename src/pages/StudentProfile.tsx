@@ -70,6 +70,13 @@ const StudentProfile = () => {
   const [feeHistory, setFeeHistory] = useState<FeeHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  const handleFullyPaid = useCallback(() => {
+    setShowConfetti(true);
+    toast.success("🎉 All fees are fully paid!");
+    setTimeout(() => setShowConfetti(false), 3000);
+  }, []);
 
   const [feeData, setFeeData] = useState<FeeData>({
     totalPayable: 0,
