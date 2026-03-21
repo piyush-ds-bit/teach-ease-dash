@@ -9,10 +9,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { paymentSchema } from "@/lib/validation";
 import { addPaymentEntry, getMonthKey } from "@/lib/ledgerCalculation";
+import { getStudentFeeData } from "@/lib/feeCalculation";
 
 type AddPaymentDialogProps = {
   studentId: string;
   onPaymentAdded: () => void;
+  onFullyPaid?: () => void;
 };
 
 export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialogProps) => {
