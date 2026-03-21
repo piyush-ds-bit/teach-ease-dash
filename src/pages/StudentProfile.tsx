@@ -245,7 +245,47 @@ const StudentProfile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* Confetti overlay */}
+      <AnimatePresence>
+        {showConfetti && (
+          <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+            {Array.from({ length: 40 }).map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute rounded-full"
+                style={{
+                  width: Math.random() * 8 + 4,
+                  height: Math.random() * 8 + 4,
+                  backgroundColor: [
+                    "hsl(var(--primary))",
+                    "#f59e0b",
+                    "#10b981",
+                    "#ef4444",
+                    "#8b5cf6",
+                    "#06b6d4",
+                  ][i % 6],
+                  left: `${Math.random() * 100}%`,
+                  top: -10,
+                }}
+                initial={{ opacity: 1, y: 0, rotate: 0 }}
+                animate={{
+                  opacity: 0,
+                  y: window.innerHeight + 50,
+                  rotate: Math.random() * 720 - 360,
+                  x: (Math.random() - 0.5) * 200,
+                }}
+                exit={{ opacity: 0 }}
+                transition={{
+                  duration: 2 + Math.random(),
+                  delay: Math.random() * 0.5,
+                  ease: "easeOut",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </AnimatePresence>
       <DashboardHeader />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <Button variant="ghost" onClick={() => navigate("/dashboard")}>
