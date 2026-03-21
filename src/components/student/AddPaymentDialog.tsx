@@ -146,7 +146,7 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded, onFullyPaid }: Add
 
       toast({
         title: "Success",
-        description: feeData => "Payment added successfully",
+        description: "Payment added successfully",
       });
 
       setOpen(false);
