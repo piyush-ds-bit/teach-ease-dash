@@ -9,13 +9,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { paymentSchema } from "@/lib/validation";
 import { addPaymentEntry, getMonthKey } from "@/lib/ledgerCalculation";
+import { getStudentFeeData } from "@/lib/feeCalculation";
 
 type AddPaymentDialogProps = {
   studentId: string;
   onPaymentAdded: () => void;
+  onFullyPaid?: () => void;
 };
 
-export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialogProps) => {
+export const AddPaymentDialog = ({ studentId, onPaymentAdded, onFullyPaid }: AddPaymentDialogProps) => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -128,6 +130,18 @@ export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialog
           paymentData.id,
           `Payment of ₹${validationResult.data.amount_paid} via ${validationResult.data.payment_mode}`
         );
+      }
+
+      // Check if student is now fully paid
+      if (onFullyPaid) {
+        try {
+          const feeData = await getStudentFeeData(studentId);
+          if (feeData && feeData.totalDue <= 0) {
+            onFullyPaid();
+          }
+        } catch (e) {
+          // Non-critical, don't block success
+        }
       }
 
       toast({

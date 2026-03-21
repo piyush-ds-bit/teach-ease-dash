@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Phone, Calendar, DollarSign, Eye, EyeOff, User, Power } from "lucide-react";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 import { PaymentHistory } from "@/components/student/PaymentHistory";
 import { AddPaymentDialog } from "@/components/student/AddPaymentDialog";
 import { EditStudentDialog } from "@/components/student/EditStudentDialog";
@@ -69,6 +70,13 @@ const StudentProfile = () => {
   const [feeHistory, setFeeHistory] = useState<FeeHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  const handleFullyPaid = useCallback(() => {
+    setShowConfetti(true);
+    toast.success("🎉 All fees are fully paid!");
+    setTimeout(() => setShowConfetti(false), 3000);
+  }, []);
 
   const [feeData, setFeeData] = useState<FeeData>({
     totalPayable: 0,
@@ -237,7 +245,47 @@ const StudentProfile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* Confetti overlay */}
+      <AnimatePresence>
+        {showConfetti && (
+          <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+            {Array.from({ length: 40 }).map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute rounded-full"
+                style={{
+                  width: Math.random() * 8 + 4,
+                  height: Math.random() * 8 + 4,
+                  backgroundColor: [
+                    "hsl(var(--primary))",
+                    "#f59e0b",
+                    "#10b981",
+                    "#ef4444",
+                    "#8b5cf6",
+                    "#06b6d4",
+                  ][i % 6],
+                  left: `${Math.random() * 100}%`,
+                  top: -10,
+                }}
+                initial={{ opacity: 1, y: 0, rotate: 0 }}
+                animate={{
+                  opacity: 0,
+                  y: window.innerHeight + 50,
+                  rotate: Math.random() * 720 - 360,
+                  x: (Math.random() - 0.5) * 200,
+                }}
+                exit={{ opacity: 0 }}
+                transition={{
+                  duration: 2 + Math.random(),
+                  delay: Math.random() * 0.5,
+                  ease: "easeOut",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </AnimatePresence>
       <DashboardHeader />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <Button variant="ghost" onClick={() => navigate("/dashboard")}>
@@ -463,7 +511,7 @@ const StudentProfile = () => {
           <TabsContent value="payments" className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h2 className="text-xl sm:text-2xl font-bold">Payment History</h2>
-              <AddPaymentDialog studentId={student.id} onPaymentAdded={handleDataUpdate} />
+              <AddPaymentDialog studentId={student.id} onPaymentAdded={handleDataUpdate} onFullyPaid={handleFullyPaid} />
             </div>
             <PaymentHistory studentId={student.id} />
           </TabsContent>
