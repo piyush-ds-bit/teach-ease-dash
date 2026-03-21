@@ -17,7 +17,7 @@ type AddPaymentDialogProps = {
   onFullyPaid?: () => void;
 };
 
-export const AddPaymentDialog = ({ studentId, onPaymentAdded }: AddPaymentDialogProps) => {
+export const AddPaymentDialog = ({ studentId, onPaymentAdded, onFullyPaid }: AddPaymentDialogProps) => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
