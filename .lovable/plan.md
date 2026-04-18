@@ -1,177 +1,70 @@
 
 
-# Fix Production Performance, Fee Timeline, and Receipt Issues
+## Plan: Fix Teacher Deletion (UI + Cascade Cleanup)
 
-## Problems Identified
+### Findings
+- No "Delete Teacher" button exists today in `TeachersTable.tsx`. The user is likely deleting rows directly in Supabase, leaving orphans behind and stale UI.
+- All teacher-owned tables (`students`, `payments`, `fee_ledger`, `student_fee_history`, `homework`, `routines`, `borrowers`, `loans`, `lending_ledger`, `plant_donations`) reference `teacher_id` as a plain `uuid` — no FK constraints, so no cascade ever happens.
+- `teachers.user_id = auth.uid()` is what `teacher_id` columns store (NOT `teachers.id`). Cleanup must key off `user_id`.
+- Auth user, role row, and uploaded files (`student-photos`, `payment-proofs`, `borrower-photos` buckets) also need removal.
 
-### 1. Slow Loading / Infinite Loading in Production
+### Approach (manual cascade in an Edge Function — safer than DB FKs)
 
-**Root Causes:**
+We avoid adding `ON DELETE CASCADE` FKs because adding FKs across 10+ existing tables risks breaking inserts if any orphan data already exists, and `teachers.user_id` would need to become a unique key first. A transactional service-role cleanup is safer and reversible.
 
-- **ProtectedAdminRoute** makes 3 sequential RPC calls (`has_role` x3) plus a teacher status check on EVERY page load -- 4 round trips before any content renders
-- **StudentsTable** fetches ALL columns from `students`, `payments`, and `student_fee_history` tables (no column filtering)
-- **DashboardStats** also fetches `students.*` and `payments.*` (full table scans with all columns)
-- **useLedger hook** has unstable `useCallback` dependencies (`pausedMonths` and `feeHistory` are arrays that change reference on every render), causing infinite re-sync loops
-- No try/catch in `loadStudents()` or `loadData()` -- any error causes permanent loading state
-- Missing database indexes on frequently queried columns
+### Changes
 
-### 2. Fee Timeline Never Displays
+**1. Edge function: add `delete` action to `supabase/functions/teacher-management/index.ts`**
 
-**Root Cause:**
+New handler `deleteTeacher(supabaseAdmin, payload)`:
+1. Validate `teacher_user_id`, prevent deleting self / any super_admin.
+2. Fetch all `students.id` where `teacher_id = user_id` (need ids for student-scoped cleanup).
+3. Fetch all `borrowers.id`, `loans.id` for that teacher.
+4. Delete in dependency order (service-role bypasses RLS):
+   - `payments` where `student_id IN (...)`
+   - `fee_ledger` where `teacher_id = user_id`
+   - `student_fee_history` where `teacher_id = user_id`
+   - `plant_donations` where `teacher_id = user_id`
+   - `homework` where `teacher_id = user_id`
+   - `students` where `teacher_id = user_id`
+   - `routines` where `teacher_id = user_id`
+   - `lending_ledger` where `teacher_id = user_id`
+   - `loans` where `teacher_id = user_id`
+   - `borrowers` where `teacher_id = user_id`
+   - `user_roles` where `user_id = teacher_user_id`
+   - `teachers` row where `user_id = teacher_user_id`
+   - `auth.admin.deleteUser(teacher_user_id)`
+5. Return `{ success, deleted_counts }`. Log every step; fail fast on critical errors with descriptive messages.
 
-- The `useLedger` hook's `syncLedger` dependency array includes `pausedMonths` and `feeHistory` which are new array references on every render
-- This causes `syncLedger` to be recreated every render, which triggers the `useEffect` to re-run, creating an infinite loop of loading states
-- The `autoSync` condition depends on `student` being loaded, but by the time student loads, the dependency array has already changed, causing repeated re-renders
-- Meanwhile `fullLedgerSync` calls `supabase.auth.getUser()` internally (another round-trip per call), compounding the problem
+(Storage object cleanup is skipped to keep scope tight — paths can be orphaned safely; we can add it later if you want.)
 
-### 3. Receipt Shows "Partial Fees Due" Incorrectly
+**2. UI: `src/components/teachers/TeachersTable.tsx`**
 
-**Root Cause:**
+- Add a red **Trash** icon button per row, wrapped in `AlertDialog` with strong confirmation text:  
+  "This will permanently delete **{name}**, all their students, payments, ledger entries, homework, routines, lending data and the login account. This cannot be undone."
+- Require typing the teacher's name to enable the destructive action (extra safeguard).
+- On confirm → call `POST /teacher-management/delete` with bearer token.
+- On success: **optimistically remove** the row from the local `teachers` array AND call `onTeacherUpdated()` to refetch from DB. Toast success with deletion summary.
+- On error: keep row, show toast with server error.
 
-- In `pdfGenerator.ts` line 202-204, the receipt calculates: `totalPayable = data.pendingMonths.length * data.monthlyFee` and then `totalPaid = Math.max(0, totalPayable - data.totalDue)`
-- This is circular and wrong -- it estimates totalPaid from pendingMonths count times a single fee, ignoring fee history
-- When a student has fully paid but `pendingMonths` still includes months (because `getChargeableMonths` returns ALL chargeable months, not just unpaid ones), the partial due calculation produces incorrect results
-- The `GenerateReceiptButton` passes `pendingMonths` from `getChargeableMonths()` which includes ALL months from joining to now (not just unpaid ones)
+**3. UI: `src/pages/TeacherManagement.tsx`**
 
----
+- Already has realtime subscription + `loadTeachers()`. Verify it triggers on `DELETE` events (it does — `event: '*'`). No change needed beyond ensuring `loadTeachers()` always runs after the action regardless of realtime timing (already wired through `onTeacherUpdated`).
+- Add a small "Refresh" button in the card header that calls `loadTeachers()` manually, in case realtime is delayed.
 
-## Implementation Plan
+### Safety
+- Edge function continues to require `super_admin` role.
+- Block deleting your own super_admin account (returns 400).
+- All deletes scoped strictly by `teacher_id = user_id` so no other teacher's data can be touched.
+- No DB schema migration is needed → zero risk to existing systems.
 
-### Step 1: Add Database Indexes
+### Files touched
+- `supabase/functions/teacher-management/index.ts` (add `delete` route + handler)
+- `src/components/teachers/TeachersTable.tsx` (delete button + confirm dialog + API call + optimistic update)
+- `src/pages/TeacherManagement.tsx` (manual Refresh button)
 
-Add indexes to speed up all queries:
-
-```sql
-CREATE INDEX IF NOT EXISTS idx_payments_student_id ON public.payments(student_id);
-CREATE INDEX IF NOT EXISTS idx_payments_teacher_id ON public.payments(teacher_id);
-CREATE INDEX IF NOT EXISTS idx_fee_ledger_student_id ON public.fee_ledger(student_id);
-CREATE INDEX IF NOT EXISTS idx_fee_ledger_teacher_id ON public.fee_ledger(teacher_id);
-CREATE INDEX IF NOT EXISTS idx_fee_ledger_student_type ON public.fee_ledger(student_id, entry_type);
-CREATE INDEX IF NOT EXISTS idx_students_teacher_id ON public.students(teacher_id);
-CREATE INDEX IF NOT EXISTS idx_homework_student_id ON public.homework(student_id);
-CREATE INDEX IF NOT EXISTS idx_homework_teacher_id ON public.homework(teacher_id);
-```
-
-### Step 2: Fix ProtectedAdminRoute -- Reduce Auth Round Trips
-
-**File:** `src/components/admin/ProtectedAdminRoute.tsx`
-
-Instead of 3 separate `has_role` RPC calls, fetch user_roles directly with a single query:
-
-```
-Before: 3 RPC calls (has_role for teacher, admin, super_admin)
-After:  1 SELECT from user_roles where user_id = session.user.id
-```
-
-This cuts auth check from ~4 round trips to ~2 (getSession + single query).
-
-### Step 3: Fix useLedger Infinite Loop
-
-**File:** `src/hooks/useLedger.ts`
-
-- Stabilize `pausedMonths` and `feeHistory` references using `JSON.stringify` comparison
-- Separate the initial sync from re-renders using a ref to track if initial sync has been done
-- Add try/catch with proper error states
-- Prevent loading state from getting stuck
-
-```
-Key change: 
-- Use useRef to store serialized versions of pausedMonths/feeHistory
-- Only trigger sync when serialized values actually change
-- Add timeout protection for loading states
-```
-
-### Step 4: Fix StudentsTable Loading -- Add Error Handling and Column Selection
-
-**File:** `src/components/dashboard/StudentsTable.tsx`
-
-- Wrap `loadStudents()` in try/catch so errors don't cause permanent loading
-- Select only needed columns instead of `*`
-- Add error state display instead of infinite spinner
-
-### Step 5: Fix DashboardStats -- Optimize Queries
-
-**File:** `src/components/dashboard/DashboardStats.tsx`
-
-- Select only needed columns: `students(id, monthly_fee)` and `payments(amount_paid, month)`
-- Wrap in try/catch
-
-### Step 6: Fix StudentProfile Loading
-
-**File:** `src/pages/StudentProfile.tsx`
-
-- Wrap `loadData()` in try/catch to prevent permanent loading state
-- Ensure `setLoading(false)` always runs (move to finally block)
-
-### Step 7: Fix Receipt "Partial Fees Due" Logic
-
-**File:** `src/lib/pdfGenerator.ts`
-
-The core problem: the receipt recalculates partial due using `pendingMonths.length * monthlyFee` which is wrong with fee history.
-
-Fix:
-- Pass `totalPaid` directly to the receipt (already available from StudentProfile)
-- Pass fee history data or the pre-calculated `partialDueInfo` from `getStudentFeeData()`
-- Remove the incorrect re-derivation of totalPaid inside pdfGenerator
-
-**File:** `src/components/student/GenerateReceiptButton.tsx`
-
-- Add `totalPaid` and `feeHistory` props
-- Pass these to `generateReceipt()`
-
-**File:** `src/pages/StudentProfile.tsx`
-
-- Pass `totalPaid` and fee history to `GenerateReceiptButton`
-
-**Updated receipt logic:**
-```
-Before (wrong):
-  totalPayable = pendingMonths.length * monthlyFee
-  totalPaid = totalPayable - totalDue
-  partialDueInfo = getPartialDueInfo(totalDue, monthlyFee, pendingMonths, totalPaid)
-
-After (correct):
-  Use pre-calculated partialDueInfo from getStudentFeeData()
-  OR use getPartialDueInfoWithHistory() with actual fee history data
-  Only show "Partial" if there is genuinely a partial payment for a month
-```
-
-### Step 8: Fix Pending Months Passed to Receipt
-
-**File:** `src/pages/StudentProfile.tsx`
-
-Currently passes ALL chargeable months to the receipt. Should only pass UNPAID months.
-
-```
-Before: pendingMonths = getChargeableMonths(joiningDate, pausedMonths) // ALL months
-After:  Calculate actual unpaid months using fee history and payments
-```
-
----
-
-## Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/components/admin/ProtectedAdminRoute.tsx` | Single query instead of 3 RPCs |
-| `src/hooks/useLedger.ts` | Fix infinite loop, stabilize deps, add error handling |
-| `src/components/dashboard/StudentsTable.tsx` | Add try/catch, select fewer columns |
-| `src/components/dashboard/DashboardStats.tsx` | Add try/catch, select fewer columns |
-| `src/pages/StudentProfile.tsx` | Add try/catch, fix pendingMonths, pass correct data to receipt |
-| `src/lib/pdfGenerator.ts` | Fix partial due calculation to use pre-calculated data |
-| `src/components/student/GenerateReceiptButton.tsx` | Accept totalPaid and partialDueInfo props |
-
-## Database Migration
-
-One new migration to add indexes on key columns.
-
----
-
-## Expected Results After Fix
-
-- Dashboard loads in 1-2 seconds (fewer round trips, indexed queries)
-- Fee Timeline displays correctly (no infinite re-render loop)
-- Receipt never shows "Partial Fees Due" when student is fully paid
-- No infinite loading spinners (all async operations have try/catch/finally)
-- Error states shown instead of permanent spinners when queries fail
+### Expected result
+- Clicking Delete instantly removes the teacher from the UI.
+- Behind the scenes every related row across all 10 tables and the auth user are wiped.
+- No orphan data, no ghost rows, no stale UI.
 
