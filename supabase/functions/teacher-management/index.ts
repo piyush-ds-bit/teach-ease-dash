@@ -523,10 +523,19 @@ async function deleteTeacher(
       log('teachers', count);
     }
 
-    // 14. auth user
+    // 14. auth user (idempotent — treat "not found" as already deleted)
     const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(teacher_user_id);
-    if (authErr) throw new Error(`Deleting auth user failed: ${authErr.message}`);
-    log('auth_user', 1);
+    if (authErr) {
+      const msg = authErr.message?.toLowerCase() ?? '';
+      if (msg.includes('not found') || msg.includes('user_not_found')) {
+        console.warn(`[deleteTeacher] Auth user ${teacher_user_id} already gone — treating as success.`);
+        log('auth_user', 0);
+      } else {
+        throw new Error(`Deleting auth user failed: ${authErr.message}`);
+      }
+    } else {
+      log('auth_user', 1);
+    }
 
     return new Response(
       JSON.stringify({ success: true, deleted_counts: counts }),
