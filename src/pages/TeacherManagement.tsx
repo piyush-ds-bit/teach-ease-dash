@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AddTeacherDialog } from "@/components/teachers/AddTeacherDialog";
 import { TeachersTable, Teacher } from "@/components/teachers/TeachersTable";
@@ -13,8 +13,10 @@ const TeacherManagement = () => {
   const { toast } = useToast();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadTeachers = async () => {
+  const loadTeachers = async (manual = false) => {
+    if (manual) setRefreshing(true);
     try {
       const { data, error } = await supabase
         .from('teachers')
@@ -32,7 +34,13 @@ const TeacherManagement = () => {
       });
     } finally {
       setLoading(false);
+      if (manual) setRefreshing(false);
     }
+  };
+
+  const handleTeacherDeleted = (userId: string) => {
+    // Optimistic removal so UI never shows ghosts
+    setTeachers((prev) => prev.filter((t) => t.user_id !== userId));
   };
 
   useEffect(() => {
@@ -73,7 +81,18 @@ const TeacherManagement = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Teachers ({teachers.length})</CardTitle>
-            <AddTeacherDialog onTeacherAdded={loadTeachers} />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadTeachers(true)}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+              <AddTeacherDialog onTeacherAdded={() => loadTeachers()} />
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -81,7 +100,11 @@ const TeacherManagement = () => {
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : (
-              <TeachersTable teachers={teachers} onTeacherUpdated={loadTeachers} />
+              <TeachersTable
+                teachers={teachers}
+                onTeacherUpdated={() => loadTeachers()}
+                onTeacherDeleted={handleTeacherDeleted}
+              />
             )}
           </CardContent>
         </Card>

@@ -22,6 +22,10 @@ interface ResendInvitePayload {
   teacher_user_id: string;
 }
 
+interface DeleteTeacherPayload {
+  teacher_user_id: string;
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -93,6 +97,10 @@ Deno.serve(async (req: Request) => {
       case 'resend-invite': {
         const payload: ResendInvitePayload = await req.json();
         return await resendInvite(supabaseAdmin, payload);
+      }
+      case 'delete': {
+        const payload: DeleteTeacherPayload = await req.json();
+        return await deleteTeacher(supabaseAdmin, callerId, payload);
       }
       default:
         return new Response(
@@ -333,4 +341,203 @@ async function resendInvite(
     }),
     { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function deleteTeacher(
+  supabaseAdmin: SupabaseClient<any>,
+  callerId: string,
+  payload: DeleteTeacherPayload
+) {
+  const { teacher_user_id } = payload;
+
+  if (!teacher_user_id || typeof teacher_user_id !== 'string') {
+    return new Response(
+      JSON.stringify({ error: 'Teacher user ID is required' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Prevent self-deletion
+  if (teacher_user_id === callerId) {
+    return new Response(
+      JSON.stringify({ error: 'You cannot delete your own account' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Prevent deleting another super_admin
+  const { data: targetIsSuperAdmin } = await supabaseAdmin.rpc('has_role', {
+    _user_id: teacher_user_id,
+    _role: 'super_admin',
+  });
+  if (targetIsSuperAdmin) {
+    return new Response(
+      JSON.stringify({ error: 'Cannot delete a super admin account' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const counts: Record<string, number> = {};
+  const log = (label: string, n: number | null | undefined) => {
+    counts[label] = n ?? 0;
+    console.log(`[deleteTeacher] ${label}: ${n ?? 0}`);
+  };
+
+  try {
+    // Fetch student IDs (needed for payments cleanup since payments lack teacher_id reliably)
+    const { data: studentRows, error: studentsFetchErr } = await supabaseAdmin
+      .from('students')
+      .select('id')
+      .eq('teacher_id', teacher_user_id);
+    if (studentsFetchErr) throw new Error(`Fetching students failed: ${studentsFetchErr.message}`);
+    const studentIds = (studentRows ?? []).map((s: { id: string }) => s.id);
+
+    // 1. payments by student_id (also covers any with NULL teacher_id)
+    if (studentIds.length > 0) {
+      const { error, count } = await supabaseAdmin
+        .from('payments')
+        .delete({ count: 'exact' })
+        .in('student_id', studentIds);
+      if (error) throw new Error(`Deleting payments failed: ${error.message}`);
+      log('payments', count);
+    } else log('payments', 0);
+
+    // 2. fee_ledger
+    {
+      const { error, count } = await supabaseAdmin
+        .from('fee_ledger')
+        .delete({ count: 'exact' })
+        .eq('teacher_id', teacher_user_id);
+      if (error) throw new Error(`Deleting fee_ledger failed: ${error.message}`);
+      log('fee_ledger', count);
+    }
+
+    // 3. student_fee_history
+    {
+      const { error, count } = await supabaseAdmin
+        .from('student_fee_history')
+        .delete({ count: 'exact' })
+        .eq('teacher_id', teacher_user_id);
+      if (error) throw new Error(`Deleting student_fee_history failed: ${error.message}`);
+      log('student_fee_history', count);
+    }
+
+    // 4. plant_donations
+    {
+      const { error, count } = await supabaseAdmin
+        .from('plant_donations')
+        .delete({ count: 'exact' })
+        .eq('teacher_id', teacher_user_id);
+      if (error) throw new Error(`Deleting plant_donations failed: ${error.message}`);
+      log('plant_donations', count);
+    }
+
+    // 5. homework
+    {
+      const { error, count } = await supabaseAdmin
+        .from('homework')
+        .delete({ count: 'exact' })
+        .eq('teacher_id', teacher_user_id);
+      if (error) throw new Error(`Deleting homework failed: ${error.message}`);
+      log('homework', count);
+    }
+
+    // 6. students
+    {
+      const { error, count } = await supabaseAdmin
+        .from('students')
+        .delete({ count: 'exact' })
+        .eq('teacher_id', teacher_user_id);
+      if (error) throw new Error(`Deleting students failed: ${error.message}`);
+      log('students', count);
+    }
+
+    // 7. routines
+    {
+      const { error, count } = await supabaseAdmin
+        .from('routines')
+        .delete({ count: 'exact' })
+        .eq('teacher_id', teacher_user_id);
+      if (error) throw new Error(`Deleting routines failed: ${error.message}`);
+      log('routines', count);
+    }
+
+    // 8. lending_ledger
+    {
+      const { error, count } = await supabaseAdmin
+        .from('lending_ledger')
+        .delete({ count: 'exact' })
+        .eq('teacher_id', teacher_user_id);
+      if (error) throw new Error(`Deleting lending_ledger failed: ${error.message}`);
+      log('lending_ledger', count);
+    }
+
+    // 9. loans
+    {
+      const { error, count } = await supabaseAdmin
+        .from('loans')
+        .delete({ count: 'exact' })
+        .eq('teacher_id', teacher_user_id);
+      if (error) throw new Error(`Deleting loans failed: ${error.message}`);
+      log('loans', count);
+    }
+
+    // 10. borrowers
+    {
+      const { error, count } = await supabaseAdmin
+        .from('borrowers')
+        .delete({ count: 'exact' })
+        .eq('teacher_id', teacher_user_id);
+      if (error) throw new Error(`Deleting borrowers failed: ${error.message}`);
+      log('borrowers', count);
+    }
+
+    // 11. user_roles
+    {
+      const { error, count } = await supabaseAdmin
+        .from('user_roles')
+        .delete({ count: 'exact' })
+        .eq('user_id', teacher_user_id);
+      if (error) throw new Error(`Deleting user_roles failed: ${error.message}`);
+      log('user_roles', count);
+    }
+
+    // 12. user_preferences (best-effort)
+    {
+      const { error, count } = await supabaseAdmin
+        .from('user_preferences')
+        .delete({ count: 'exact' })
+        .eq('user_id', teacher_user_id);
+      if (error) console.error('Deleting user_preferences failed:', error.message);
+      else log('user_preferences', count);
+    }
+
+    // 13. teachers row
+    {
+      const { error, count } = await supabaseAdmin
+        .from('teachers')
+        .delete({ count: 'exact' })
+        .eq('user_id', teacher_user_id);
+      if (error) throw new Error(`Deleting teachers row failed: ${error.message}`);
+      log('teachers', count);
+    }
+
+    // 14. auth user
+    const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(teacher_user_id);
+    if (authErr) throw new Error(`Deleting auth user failed: ${authErr.message}`);
+    log('auth_user', 1);
+
+    return new Response(
+      JSON.stringify({ success: true, deleted_counts: counts }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (err) {
+    console.error('[deleteTeacher] Failed:', err, 'Partial counts:', counts);
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(
+      JSON.stringify({ error: message, partial_counts: counts }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
 }
