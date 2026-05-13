@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { GraduationCap, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import vidyaSyncLogo from "@/assets/vidyasync-logo.png";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -117,11 +118,11 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md shadow-hover">
         <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center">
-            <GraduationCap className="h-6 w-6 text-primary-foreground" />
+          <div className="mx-auto w-16 h-16 rounded-xl bg-card shadow-card flex items-center justify-center p-2">
+            <img src={vidyaSyncLogo} alt="VidyaSync" className="h-full w-full object-contain" />
           </div>
-          <CardTitle className="text-2xl">TeachEase Dashboard</CardTitle>
-          <CardDescription>Sign in to manage your tuition business</CardDescription>
+          <CardTitle className="text-2xl">VidyaSync</CardTitle>
+          <CardDescription>Sign in to your teacher account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">

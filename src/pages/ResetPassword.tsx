@@ -146,7 +146,7 @@ const ResetPassword = () => {
           </div>
           <CardTitle className="text-2xl">Set Your Password</CardTitle>
           <CardDescription>
-            Create a secure password for your TeachEase account
+            Create a secure password for your VidyaSync account
           </CardDescription>
         </CardHeader>
         <CardContent>

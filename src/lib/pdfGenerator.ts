@@ -37,10 +37,10 @@ export const generateReceipt = async (data: ReceiptData) => {
   pdf.setFontSize(24);
   pdf.setFont("helvetica", "bold");
   pdf.text("FEE RECEIPT", 105, 20, { align: "center" });
-  
+
   pdf.setFontSize(12);
   pdf.setFont("helvetica", "normal");
-  pdf.text("TeachEase Dashboard", 105, 30, { align: "center" });
+  pdf.text("VidyaSync", 105, 30, { align: "center" });
 
   // Top-left: Student photo (if available)
   let photoYOffset = 0;
