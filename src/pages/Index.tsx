@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, TrendingUp, Users, DollarSign, Shield } from "lucide-react";
+import { TrendingUp, Users, DollarSign, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import vidyaSyncLogo from "@/assets/vidyasync-logo.png";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -19,21 +20,28 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background">
-      <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
-        <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Ram Ram Piyush</h2>
+      <div className="absolute top-4 left-4 sm:top-8 sm:left-8 flex items-center gap-3">
+        <img src={vidyaSyncLogo} alt="VidyaSync logo" className="h-10 w-10 sm:h-12 sm:w-12 object-contain" />
+        <div className="leading-tight">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">VidyaSync</h2>
+          <p className="text-[11px] sm:text-xs text-muted-foreground">Seekho • Sync Karo • Grow Karo</p>
+        </div>
       </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center space-y-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-primary shadow-hover">
-            <GraduationCap className="h-10 w-10 text-primary-foreground" />
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-card shadow-hover p-3">
+            <img src={vidyaSyncLogo} alt="VidyaSync" className="h-full w-full object-contain" />
           </div>
           
           <div className="space-y-4">
             <h1 className="text-5xl md:text-6xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              TeachEase Dashboard
+              VidyaSync
             </h1>
+            <p className="text-base sm:text-lg font-medium text-primary/80 tracking-wide">
+              Seekho • Sync Karo • Grow Karo
+            </p>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Streamline your tuition management with powerful tools to track students, fees, and payments—all in one place.
+              A modern, education-focused platform for teachers to manage students, fees, routines and lending — all in one place.
             </p>
           </div>
 
