@@ -1,4 +1,5 @@
-import { GraduationCap, LogOut, Calendar, Users, Wallet } from "lucide-react";
+import { LogOut, Calendar, Users, Wallet } from "lucide-react";
+import vidyaSyncLogo from "@/assets/vidyasync-logo.png";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -40,12 +41,14 @@ export const DashboardHeader = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 md:gap-6">
               <Link to="/dashboard" className="flex items-center gap-2 md:gap-3">
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-lg bg-gradient-primary flex items-center justify-center shrink-0">
-                  <GraduationCap className="h-5 w-5 md:h-6 md:w-6 text-primary-foreground" />
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl font-bold">TeachEase</h1>
-                  <p className="text-xs sm:text-sm text-muted-foreground">Tuition Management</p>
+                <img
+                  src={vidyaSyncLogo}
+                  alt="VidyaSync logo"
+                  className="h-9 w-9 md:h-10 md:w-10 object-contain shrink-0"
+                />
+                <div className="hidden sm:block">
+                  <h1 className="text-lg sm:text-xl font-bold tracking-tight">VidyaSync</h1>
+                  <p className="text-xs text-muted-foreground">Seekho • Sync Karo • Grow Karo</p>
                 </div>
               </Link>
               <nav className="flex gap-1 md:gap-2">
