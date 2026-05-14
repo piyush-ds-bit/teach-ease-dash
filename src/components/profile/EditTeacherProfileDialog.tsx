@@ -50,6 +50,16 @@ export const EditTeacherProfileDialog = ({
   const [removePhoto, setRemovePhoto] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && !loading) {
+      setName(fullName);
+      setPhotoFile(null);
+      setPreviewUrl(currentPhotoUrl);
+      setRemovePhoto(false);
+    }
+    onOpenChange(nextOpen);
+  };
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -85,14 +95,16 @@ export const EditTeacherProfileDialog = ({
       let newPath: string | null = currentPhotoPath;
 
       if (removePhoto && currentPhotoPath) {
-        await supabase.storage.from("teacher-profiles").remove([currentPhotoPath]);
+        const { error: removeErr } = await supabase.storage.from("teacher-profiles").remove([currentPhotoPath]);
+        if (removeErr) throw removeErr;
         newPath = null;
       }
 
       if (photoFile) {
         // Delete prior file
         if (currentPhotoPath) {
-          await supabase.storage.from("teacher-profiles").remove([currentPhotoPath]);
+          const { error: removeErr } = await supabase.storage.from("teacher-profiles").remove([currentPhotoPath]);
+          if (removeErr) throw removeErr;
         }
         const compressed = await compressImage(photoFile, 512, 0.85);
         const ext = compressed.type === "image/png" ? "png" : "jpg";
@@ -111,8 +123,8 @@ export const EditTeacherProfileDialog = ({
       if (updErr) throw updErr;
 
       toast({ title: "Profile updated" });
-      onOpenChange(false);
       onSaved();
+      handleOpenChange(false);
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -121,12 +133,12 @@ export const EditTeacherProfileDialog = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[460px] max-h-[90dvh] flex flex-col p-0 gap-0">
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
           <DialogHeader className="px-6 pt-6 pb-2">
-            <DialogTitle>Edit Profile</DialogTitle>
-            <DialogDescription>Update your name and profile photo</DialogDescription>
+            <DialogTitle>Profile Settings</DialogTitle>
+            <DialogDescription>Update your teacher profile details</DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 overscroll-contain">
@@ -168,7 +180,7 @@ export const EditTeacherProfileDialog = ({
           </div>
 
           <DialogFooter className="sticky bottom-0 bg-background border-t px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex-row gap-2 sm:gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} className="flex-1 sm:flex-none">
               Cancel
             </Button>
             <Button type="submit" disabled={loading} className="flex-1 sm:flex-none">
