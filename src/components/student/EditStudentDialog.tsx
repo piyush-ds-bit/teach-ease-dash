@@ -316,8 +316,11 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={loading}>
+          <DialogFooter className="sticky bottom-0 bg-background border-t px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex-row gap-2 sm:gap-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1 sm:flex-none">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading} className="flex-1 sm:flex-none">
               {loading ? "Updating..." : "Update Student"}
             </Button>
           </DialogFooter>
