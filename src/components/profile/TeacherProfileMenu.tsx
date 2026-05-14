@@ -51,6 +51,39 @@ export const TeacherProfileMenu = () => {
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const buildFallbackTeacher = useCallback((user: NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"]>) => ({
+    id: "",
+    user_id: user.id,
+    full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Teacher",
+    email: user.email || "",
+    profile_photo_url: null,
+  }), []);
+
+  const createMissingTeacherProfile = useCallback(async (
+    fallback: TeacherRow,
+  ): Promise<TeacherRow | null> => {
+    if (!fallback.email) return null;
+
+    const { data, error } = await supabase
+      .from("teachers")
+      .insert({
+        user_id: fallback.user_id,
+        full_name: fallback.full_name,
+        email: fallback.email,
+        created_by: fallback.user_id,
+        status: "active",
+      })
+      .select("id, user_id, full_name, email, profile_photo_url")
+      .single();
+
+    if (error || !data) {
+      console.error("Unable to create teacher profile", error);
+      return null;
+    }
+
+    return data as TeacherRow;
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     const { data: auth } = await supabase.auth.getUser();
@@ -58,39 +91,38 @@ export const TeacherProfileMenu = () => {
       setLoading(false);
       return;
     }
+    const fallbackTeacher = buildFallbackTeacher(auth.user);
     const { data, error } = await supabase
       .from("teachers")
       .select("id, user_id, full_name, email, profile_photo_url")
       .eq("user_id", auth.user.id)
       .maybeSingle();
-    if (error || !data) {
-      toast({
-        title: "Profile unavailable",
-        description: error?.message || "Your teacher profile could not be loaded.",
-        variant: "destructive",
-      });
-      setTeacher({
-        id: "",
-        user_id: auth.user.id,
-        full_name: auth.user.email?.split("@")[0] || "Teacher",
-        email: auth.user.email || "",
-        profile_photo_url: null,
-      });
+    const teacherRow = data ? (data as TeacherRow) : await createMissingTeacherProfile(fallbackTeacher);
+
+    if (error || !teacherRow) {
+      if (error) {
+        toast({
+          title: "Profile unavailable",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+      setTeacher(fallbackTeacher);
       setSignedUrl(null);
       setLoading(false);
       return;
     }
-    setTeacher(data as TeacherRow);
-    if (data.profile_photo_url) {
+    setTeacher(teacherRow);
+    if (teacherRow.profile_photo_url) {
       const { data: signed } = await supabase.storage
         .from("teacher-profiles")
-        .createSignedUrl(data.profile_photo_url, 60 * 60 * 24 * 7);
+        .createSignedUrl(teacherRow.profile_photo_url, 60 * 60 * 24 * 7);
       setSignedUrl(signed?.signedUrl ?? null);
     } else {
       setSignedUrl(null);
     }
     setLoading(false);
-  }, [toast]);
+  }, [buildFallbackTeacher, createMissingTeacherProfile, toast]);
 
   useEffect(() => {
     load();
