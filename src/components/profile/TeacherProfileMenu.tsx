@@ -150,9 +150,8 @@ export const TeacherProfileMenu = () => {
           <DropdownMenuSeparator className="my-0" />
           <div className="p-1">
             <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
-                setEditOpen(true);
+              onSelect={() => {
+                setTimeout(() => setEditOpen(true), 0);
               }}
               className="cursor-pointer"
               disabled={!teacher.id}
@@ -161,9 +160,8 @@ export const TeacherProfileMenu = () => {
               Edit Profile
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
-                setLogoutOpen(true);
+              onSelect={() => {
+                setTimeout(() => setLogoutOpen(true), 0);
               }}
               className="cursor-pointer text-destructive focus:text-destructive"
             >
