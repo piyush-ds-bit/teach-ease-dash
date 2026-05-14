@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,7 +26,7 @@ type Props = {
   currentPhotoPath: string | null;
   currentPhotoUrl: string | null;
   initials: string;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
 };
 
 const ALLOWED = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -49,6 +49,25 @@ export const EditTeacherProfileDialog = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentPhotoUrl);
   const [removePhoto, setRemovePhoto] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(fullName);
+      setPhotoFile(null);
+      setPreviewUrl(currentPhotoUrl);
+      setRemovePhoto(false);
+    }
+  }, [currentPhotoUrl, fullName, open]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && !loading) {
+      setName(fullName);
+      setPhotoFile(null);
+      setPreviewUrl(currentPhotoUrl);
+      setRemovePhoto(false);
+    }
+    onOpenChange(nextOpen);
+  };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -83,17 +102,15 @@ export const EditTeacherProfileDialog = ({
     setLoading(true);
     try {
       let newPath: string | null = currentPhotoPath;
+      let oldPathToDelete: string | null = null;
+      let uploadedPath: string | null = null;
 
       if (removePhoto && currentPhotoPath) {
-        await supabase.storage.from("teacher-profiles").remove([currentPhotoPath]);
         newPath = null;
+        oldPathToDelete = currentPhotoPath;
       }
 
       if (photoFile) {
-        // Delete prior file
-        if (currentPhotoPath) {
-          await supabase.storage.from("teacher-profiles").remove([currentPhotoPath]);
-        }
         const compressed = await compressImage(photoFile, 512, 0.85);
         const ext = compressed.type === "image/png" ? "png" : "jpg";
         const path = `${userId}/avatar-${Date.now()}.${ext}`;
@@ -102,31 +119,43 @@ export const EditTeacherProfileDialog = ({
           .upload(path, compressed, { contentType: compressed.type, upsert: true });
         if (upErr) throw upErr;
         newPath = path;
+        uploadedPath = path;
+        oldPathToDelete = currentPhotoPath;
       }
 
       const { error: updErr } = await supabase
         .from("teachers")
-        .update({ full_name: name.trim(), profile_photo_url: newPath } as any)
-        .eq("id", teacherId);
-      if (updErr) throw updErr;
+        .update({ full_name: name.trim(), profile_photo_url: newPath })
+        .eq("id", teacherId)
+        .eq("user_id", userId);
+      if (updErr) {
+        if (uploadedPath) await supabase.storage.from("teacher-profiles").remove([uploadedPath]);
+        throw updErr;
+      }
+
+      if (oldPathToDelete && oldPathToDelete !== uploadedPath) {
+        const { error: removeErr } = await supabase.storage.from("teacher-profiles").remove([oldPathToDelete]);
+        if (removeErr) console.warn("Could not delete old teacher profile photo", removeErr);
+      }
 
       toast({ title: "Profile updated" });
-      onOpenChange(false);
-      onSaved();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      await onSaved();
+      handleOpenChange(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not update profile";
+      toast({ title: "Error", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[460px] max-h-[90dvh] flex flex-col p-0 gap-0">
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
           <DialogHeader className="px-6 pt-6 pb-2">
-            <DialogTitle>Edit Profile</DialogTitle>
-            <DialogDescription>Update your name and profile photo</DialogDescription>
+            <DialogTitle>Profile Settings</DialogTitle>
+            <DialogDescription>Update your teacher profile details</DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 overscroll-contain">
@@ -168,7 +197,7 @@ export const EditTeacherProfileDialog = ({
           </div>
 
           <DialogFooter className="sticky bottom-0 bg-background border-t px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex-row gap-2 sm:gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} className="flex-1 sm:flex-none">
               Cancel
             </Button>
             <Button type="submit" disabled={loading} className="flex-1 sm:flex-none">

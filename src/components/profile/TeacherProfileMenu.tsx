@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { LogOut, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,9 +46,43 @@ export const TeacherProfileMenu = () => {
   const [teacher, setTeacher] = useState<TeacherRow | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const buildFallbackTeacher = useCallback((user: NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"]>) => ({
+    id: "",
+    user_id: user.id,
+    full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Teacher",
+    email: user.email || "",
+    profile_photo_url: null,
+  }), []);
+
+  const createMissingTeacherProfile = useCallback(async (
+    fallback: TeacherRow,
+  ): Promise<TeacherRow | null> => {
+    if (!fallback.email) return null;
+
+    const { data, error } = await supabase
+      .from("teachers")
+      .insert({
+        user_id: fallback.user_id,
+        full_name: fallback.full_name,
+        email: fallback.email,
+        created_by: fallback.user_id,
+        status: "active",
+      })
+      .select("id, user_id, full_name, email, profile_photo_url")
+      .single();
+
+    if (error || !data) {
+      console.error("Unable to create teacher profile", error);
+      return null;
+    }
+
+    return data as TeacherRow;
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,34 +91,38 @@ export const TeacherProfileMenu = () => {
       setLoading(false);
       return;
     }
+    const fallbackTeacher = buildFallbackTeacher(auth.user);
     const { data, error } = await supabase
       .from("teachers")
       .select("id, user_id, full_name, email, profile_photo_url")
       .eq("user_id", auth.user.id)
       .maybeSingle();
-    if (error || !data) {
-      setTeacher({
-        id: "",
-        user_id: auth.user.id,
-        full_name: auth.user.email?.split("@")[0] || "Teacher",
-        email: auth.user.email || "",
-        profile_photo_url: null,
-      });
+    const teacherRow = data ? (data as TeacherRow) : await createMissingTeacherProfile(fallbackTeacher);
+
+    if (error || !teacherRow) {
+      if (error) {
+        toast({
+          title: "Profile unavailable",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+      setTeacher(fallbackTeacher);
       setSignedUrl(null);
       setLoading(false);
       return;
     }
-    setTeacher(data as TeacherRow);
-    if (data.profile_photo_url) {
+    setTeacher(teacherRow);
+    if (teacherRow.profile_photo_url) {
       const { data: signed } = await supabase.storage
         .from("teacher-profiles")
-        .createSignedUrl(data.profile_photo_url, 60 * 60 * 24 * 7);
+        .createSignedUrl(teacherRow.profile_photo_url, 60 * 60 * 24 * 7);
       setSignedUrl(signed?.signedUrl ?? null);
     } else {
       setSignedUrl(null);
     }
     setLoading(false);
-  }, []);
+  }, [buildFallbackTeacher, createMissingTeacherProfile, toast]);
 
   useEffect(() => {
     load();
@@ -106,10 +143,15 @@ export const TeacherProfileMenu = () => {
   if (!teacher) return null;
 
   const initials = getInitials(teacher.full_name);
+  const canEditProfile = Boolean(teacher.id);
+  const openEditProfile = () => {
+    setMenuOpen(false);
+    window.requestAnimationFrame(() => setEditOpen(true));
+  };
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -150,18 +192,20 @@ export const TeacherProfileMenu = () => {
           <DropdownMenuSeparator className="my-0" />
           <div className="p-1">
             <DropdownMenuItem
-              onSelect={() => {
-                setTimeout(() => setEditOpen(true), 0);
+              onSelect={(event) => {
+                event.preventDefault();
+                if (canEditProfile) openEditProfile();
               }}
-              className="cursor-pointer"
-              disabled={!teacher.id}
+              className="cursor-pointer rounded-md font-medium text-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground data-[disabled]:cursor-not-allowed"
+              disabled={!canEditProfile}
             >
               <UserCog className="h-4 w-4 mr-2" />
               Edit Profile
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => {
-                setTimeout(() => setLogoutOpen(true), 0);
+                setMenuOpen(false);
+                window.requestAnimationFrame(() => setLogoutOpen(true));
               }}
               className="cursor-pointer text-destructive focus:text-destructive"
             >
