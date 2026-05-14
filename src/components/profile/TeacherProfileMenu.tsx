@@ -47,6 +47,7 @@ export const TeacherProfileMenu = () => {
   const [teacher, setTeacher] = useState<TeacherRow | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -64,6 +65,11 @@ export const TeacherProfileMenu = () => {
       .eq("user_id", auth.user.id)
       .maybeSingle();
     if (error || !data) {
+      toast({
+        title: "Profile unavailable",
+        description: error?.message || "Your teacher profile could not be loaded.",
+        variant: "destructive",
+      });
       setTeacher({
         id: "",
         user_id: auth.user.id,
@@ -106,10 +112,15 @@ export const TeacherProfileMenu = () => {
   if (!teacher) return null;
 
   const initials = getInitials(teacher.full_name);
+  const canEditProfile = Boolean(teacher.id);
+  const openEditProfile = () => {
+    setMenuOpen(false);
+    window.requestAnimationFrame(() => setEditOpen(true));
+  };
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -150,18 +161,20 @@ export const TeacherProfileMenu = () => {
           <DropdownMenuSeparator className="my-0" />
           <div className="p-1">
             <DropdownMenuItem
-              onSelect={() => {
-                setTimeout(() => setEditOpen(true), 0);
+              onSelect={(event) => {
+                event.preventDefault();
+                if (canEditProfile) openEditProfile();
               }}
-              className="cursor-pointer"
-              disabled={!teacher.id}
+              className="cursor-pointer rounded-md font-medium text-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground data-[disabled]:cursor-not-allowed"
+              disabled={!canEditProfile}
             >
               <UserCog className="h-4 w-4 mr-2" />
               Edit Profile
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => {
-                setTimeout(() => setLogoutOpen(true), 0);
+                setMenuOpen(false);
+                window.requestAnimationFrame(() => setLogoutOpen(true));
               }}
               className="cursor-pointer text-destructive focus:text-destructive"
             >
