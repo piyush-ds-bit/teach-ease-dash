@@ -26,7 +26,7 @@ type Props = {
   currentPhotoPath: string | null;
   currentPhotoUrl: string | null;
   initials: string;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
 };
 
 const ALLOWED = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -102,19 +102,15 @@ export const EditTeacherProfileDialog = ({
     setLoading(true);
     try {
       let newPath: string | null = currentPhotoPath;
+      let oldPathToDelete: string | null = null;
+      let uploadedPath: string | null = null;
 
       if (removePhoto && currentPhotoPath) {
-        const { error: removeErr } = await supabase.storage.from("teacher-profiles").remove([currentPhotoPath]);
-        if (removeErr) throw removeErr;
         newPath = null;
+        oldPathToDelete = currentPhotoPath;
       }
 
       if (photoFile) {
-        // Delete prior file
-        if (currentPhotoPath) {
-          const { error: removeErr } = await supabase.storage.from("teacher-profiles").remove([currentPhotoPath]);
-          if (removeErr) throw removeErr;
-        }
         const compressed = await compressImage(photoFile, 512, 0.85);
         const ext = compressed.type === "image/png" ? "png" : "jpg";
         const path = `${userId}/avatar-${Date.now()}.${ext}`;
@@ -123,19 +119,31 @@ export const EditTeacherProfileDialog = ({
           .upload(path, compressed, { contentType: compressed.type, upsert: true });
         if (upErr) throw upErr;
         newPath = path;
+        uploadedPath = path;
+        oldPathToDelete = currentPhotoPath;
       }
 
       const { error: updErr } = await supabase
         .from("teachers")
-        .update({ full_name: name.trim(), profile_photo_url: newPath } as any)
-        .eq("id", teacherId);
-      if (updErr) throw updErr;
+        .update({ full_name: name.trim(), profile_photo_url: newPath })
+        .eq("id", teacherId)
+        .eq("user_id", userId);
+      if (updErr) {
+        if (uploadedPath) await supabase.storage.from("teacher-profiles").remove([uploadedPath]);
+        throw updErr;
+      }
+
+      if (oldPathToDelete && oldPathToDelete !== uploadedPath) {
+        const { error: removeErr } = await supabase.storage.from("teacher-profiles").remove([oldPathToDelete]);
+        if (removeErr) console.warn("Could not delete old teacher profile photo", removeErr);
+      }
 
       toast({ title: "Profile updated" });
-      onSaved();
+      await onSaved();
       handleOpenChange(false);
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not update profile";
+      toast({ title: "Error", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
