@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { LogOut, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -91,7 +90,7 @@ export const TeacherProfileMenu = () => {
       setSignedUrl(null);
     }
     setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     load();
