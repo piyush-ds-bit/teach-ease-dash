@@ -471,6 +471,7 @@ export type Database = {
           full_name: string
           id: string
           phone: string | null
+          profile_photo_url: string | null
           status: Database["public"]["Enums"]["teacher_status"]
           updated_at: string
           user_id: string
@@ -482,6 +483,7 @@ export type Database = {
           full_name: string
           id?: string
           phone?: string | null
+          profile_photo_url?: string | null
           status?: Database["public"]["Enums"]["teacher_status"]
           updated_at?: string
           user_id: string
@@ -493,6 +495,7 @@ export type Database = {
           full_name?: string
           id?: string
           phone?: string | null
+          profile_photo_url?: string | null
           status?: Database["public"]["Enums"]["teacher_status"]
           updated_at?: string
           user_id?: string

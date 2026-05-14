@@ -1,52 +1,75 @@
-## Plan: Rebrand to VidyaSync
+## Plan: Teacher Profile Avatar + Mobile Edit Form Scroll Fix
 
-### Brand decisions (locked from clarification)
-- App name: **VidyaSync** (replaces "TeachEase" everywhere)
-- Tagline: **"Seekho • Sync Karo • Grow Karo"** (replaces "Ram Ram Piyush" on landing top-left)
-- PDF receipt: keeps the **"Ram Ram {studentName}"** greeting already personalised per receipt; the static "Ram Ram Piyush" header text is removed and replaced with VidyaSync logo + name top-right
-- Memory rule about "Ram Ram Piyush" will be updated to reflect the new tagline + per-student greeting
+### Feature 1 — Teacher Profile Photo + Avatar Menu
 
-### 1. Logo asset
-- Copy uploaded logo `user-uploads://ChatGPT_Image_May_13_2026_07_34_21_AM.png` → `src/assets/vidyasync-logo.png` (for in-app imports)
-- Also copy a smaller copy → `public/vidyasync-logo.png` and `public/favicon.png` (favicon + PDF embedding via URL)
-- Replace existing `public/favicon.ico` reference
+**DB migration**
+- Add `profile_photo_url TEXT NULL` to `public.teachers` (full_name + email already exist).
+- Create private storage bucket `teacher-profiles` with RLS:
+  - Teacher can `SELECT/INSERT/UPDATE/DELETE` only objects whose first folder = their `auth.uid()`.
+  - Admins can manage all.
 
-### 2. Files to update (text rename + logo placement)
+**New component: `src/components/profile/TeacherProfileMenu.tsx`**
+- Fetches current teacher row (`teachers` filtered by `user_id = auth.uid()`).
+- Resolves signed URL (1-year) for `profile_photo_url` if present.
+- Renders circular `Avatar` (image or initials from `full_name`).
+- Click → `DropdownMenu` (or `Popover`) with glassmorphism card:
+  - Larger avatar, full name, email
+  - "Edit Profile" → opens `EditTeacherProfileDialog`
+  - "Logout" → existing confirm flow
+- Loading skeleton; no broken-image flash (use `onError` + fallback to initials).
 
-| File | Change |
-|---|---|
-| `index.html` | Title → "VidyaSync — Smart Tuition Management for Teachers"; meta description, author, OG title/description; favicon link → `/favicon.png`; add theme-color meta (deep blue) |
-| `src/pages/Index.tsx` | Top-left: VidyaSync logo + "VidyaSync" wordmark + tagline "Seekho • Sync Karo • Grow Karo"; hero title "VidyaSync Dashboard" → "VidyaSync"; copy refresh to education-SaaS tone |
-| `src/pages/Auth.tsx` | Card title "TeachEase Dashboard" → "VidyaSync"; replace GraduationCap icon block with logo image; subtitle copy refresh |
-| `src/pages/ResetPassword.tsx` | "TeachEase account" → "VidyaSync account" |
-| `src/pages/SetPassword.tsx` | Add logo above title (consistency with Auth) |
-| `src/pages/AuthCallback.tsx` | Add small logo above spinner |
-| `src/components/dashboard/DashboardHeader.tsx` | Replace `<h1>TeachEase</h1>` with logo + "VidyaSync" wordmark; ensure responsive (logo only on mobile, logo + wordmark on desktop) |
-| `src/lib/pdfGenerator.ts` | Header: VidyaSync logo top-right + "VidyaSync" text; remove static "TeachEase Dashboard" title; keep "Ram Ram {studentName}" greeting body intact |
-| `supabase/functions/teacher-management/index.ts` | Invite email subject/body copy uses "VidyaSync" (redirect URL stays — it's the deployed domain, not branding) |
+**New component: `src/components/profile/EditTeacherProfileDialog.tsx`**
+- Edit `full_name`, upload/replace/remove avatar.
+- Accepts jpg/jpeg/png/webp; client-side compress (canvas resize to max 512px, 0.85 quality) before upload.
+- Path: `${user.id}/avatar.<ext>`; deletes prior file on change.
+- Updates `teachers.profile_photo_url` with the storage path (not URL); component resolves signed URL on render.
 
-### 3. Color polish (tailwind tokens — light touch only)
-- Confirm `src/index.css` primary already in deep-blue range; if not, nudge `--primary` toward `hsl(217 91% 35%)` and add `--accent` cyan/teal `hsl(187 85% 43%)` and success green `hsl(152 65% 45%)` to align with logo gradient
-- No component-level color changes — semantic tokens drive it
+**Header changes (`DashboardHeader.tsx`)**
+- Remove standalone Logout button + AlertDialog (logout moves into avatar dropdown).
+- Mount `<TeacherProfileMenu />` in the top-right slot.
+- Keep nav (Students/Routine/Lending) unchanged.
 
-### 4. Mobile / PWA prep (lightweight, non-breaking)
-- Add `<link rel="apple-touch-icon" href="/vidyasync-logo.png">` and `<meta name="apple-mobile-web-app-title" content="VidyaSync">` in `index.html`
-- Note: no Capacitor config exists yet; full PWA/Capacitor setup is out of scope for this rename pass (called out in "manual steps")
+**Data isolation**
+- All reads filtered by `user_id = auth.uid()` and protected by existing teachers RLS.
+- Storage RLS scopes to per-user folder.
 
-### 5. Memory update
-- Edit `mem://index.md` Core: replace the "Ram Ram Piyush" line with:
-  > Brand: VidyaSync. Tagline "Seekho • Sync Karo • Grow Karo" on landing top-left. PDF receipts greet each student personally with "Ram Ram {studentName}".
+---
 
-### 6. QA pass
-- `rg -i "teachease|ram ram piyush"` after edits — must return only the personalised PDF greeting and the memory note
-- Verify build, visit `/`, `/auth`, `/dashboard`, `/reset-password`, generate a PDF receipt, confirm logo + branding render at retina sizes
+### Feature 2 — Mobile scroll fix for Edit Student dialog
 
-### Out of scope (manual steps to flag at the end)
-- Real Capacitor `capacitor.config.ts` (none in repo today) — only needed if user wants native build
-- Generating a proper transparent SVG logo + multi-size PWA icons (current PNG will be used as-is)
-- Renaming the deployed Lovable subdomain `piyushbusiness.lovable.app` → `vidyasync.lovable.app` (done in Lovable publish settings, not code)
+File: `src/components/student/EditStudentDialog.tsx`
 
-### Deliverables after implementation
-1. List of files changed
-2. Remaining manual steps (Capacitor config, subdomain rename, optional SVG logo)
-3. Any extra assets still needed (icon set for PWA / app stores if mobile path is taken)
+- Change `DialogContent` to:  
+  `className="sm:max-w-[500px] max-h-[90dvh] flex flex-col p-0"`
+- Wrap form so structure is:
+  ```
+  <form className="flex flex-col min-h-0 flex-1">
+    <DialogHeader className="px-6 pt-6" />
+    <div className="flex-1 overflow-y-auto px-6 py-4 overscroll-contain">…fields…</div>
+    <DialogFooter className="sticky bottom-0 bg-background border-t px-6 py-4 pb-[env(safe-area-inset-bottom)]">
+      <Button type="button" variant="outline" onClick={()=>setOpen(false)}>Cancel</Button>
+      <Button type="submit">Update</Button>
+    </DialogFooter>
+  </form>
+  ```
+- Use `dvh` (dynamic viewport) so mobile keyboard does not hide the sticky action bar.
+- Apply the same pattern to `EditTeacherProfileDialog` for consistency.
+
+(Other edit dialogs are out of scope unless the user asks — the report only mentioned Student → Edit Profile.)
+
+---
+
+### Files touched
+- DB migration (teachers column + storage bucket + policies)
+- `src/components/dashboard/DashboardHeader.tsx` — remove logout, mount avatar menu
+- `src/components/profile/TeacherProfileMenu.tsx` — new
+- `src/components/profile/EditTeacherProfileDialog.tsx` — new
+- `src/lib/imageCompression.ts` — small helper (canvas resize)
+- `src/components/student/EditStudentDialog.tsx` — sticky footer + scroll fix
+
+### Manual steps
+- None — bucket + policies created via migration.
+
+### Out of scope
+- Reusing avatar menu on other pages' headers (only DashboardHeader is shared across protected routes already).
+- A dedicated `/profile` route — Edit happens in dialog from dropdown.
