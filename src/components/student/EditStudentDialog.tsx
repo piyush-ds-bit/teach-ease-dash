@@ -204,15 +204,15 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
             Edit Details
           </Button>
         </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Edit Student Details</DialogTitle>
-          <DialogDescription>
-            Update the student information below
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
+      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] flex flex-col p-0 gap-0">
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle>Edit Student Details</DialogTitle>
+            <DialogDescription>
+              Update the student information below
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 overscroll-contain">
             <div className="grid gap-2">
               <Label htmlFor="name">Full Name *</Label>
               <Input
