@@ -204,15 +204,15 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
             Edit Details
           </Button>
         </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Edit Student Details</DialogTitle>
-          <DialogDescription>
-            Update the student information below
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
+      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] flex flex-col p-0 gap-0">
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle>Edit Student Details</DialogTitle>
+            <DialogDescription>
+              Update the student information below
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4 grid gap-4 overscroll-contain">
             <div className="grid gap-2">
               <Label htmlFor="name">Full Name *</Label>
               <Input
@@ -316,8 +316,11 @@ export const EditStudentDialog = ({ student, onUpdate }: EditStudentDialogProps)
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={loading}>
+          <DialogFooter className="sticky bottom-0 bg-background border-t px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex-row gap-2 sm:gap-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1 sm:flex-none">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading} className="flex-1 sm:flex-none">
               {loading ? "Updating..." : "Update Student"}
             </Button>
           </DialogFooter>
