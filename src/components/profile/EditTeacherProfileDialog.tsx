@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -49,6 +49,15 @@ export const EditTeacherProfileDialog = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentPhotoUrl);
   const [removePhoto, setRemovePhoto] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(fullName);
+      setPhotoFile(null);
+      setPreviewUrl(currentPhotoUrl);
+      setRemovePhoto(false);
+    }
+  }, [currentPhotoUrl, fullName, open]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && !loading) {
